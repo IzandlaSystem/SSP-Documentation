@@ -2,7 +2,7 @@
 
 [submodule "docs/projects/firmware"]
 	path = docs/projects/firmware
-	url = https://github.com/IzandlaSystem/SSP-S1-Firmware.git
+	url = git@github.com:IzandlaSystem/SSP-S1-Firmware.git
 	branch = main
 
 [submodule "docs/projects/backend"]

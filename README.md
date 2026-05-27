@@ -5,6 +5,7 @@
 Centralized VitePress documentation hub for SSP Sports Tracker engineering. This repository publishes a single source of truth site while project-specific docs remain authored in independent firmware, backend, web frontend, and mobile app repositories.
 
 The firmware stream now sources from https://github.com/IzandlaSystem/SSP-S1-Firmware and should publish its docs from that repository's `docs/` folder.
+Because the firmware repository is private, Vercel must have SSH or GitHub App access to clone the firmware submodule during build.
 
 ## Architecture
 
@@ -60,3 +61,5 @@ Use these settings in a Vercel project:
 - Node.js Version: `20`
 
 The config detects `VERCEL` automatically and uses `/` as the base path, so routes work at the root of the Vercel deployment.
+
+For Vercel to fetch the private firmware submodule successfully, ensure the project has access to the private repo and the firmware submodule URL remains the SSH form in [.gitmodules](.gitmodules).
