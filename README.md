@@ -50,6 +50,10 @@ curl -X POST \
 
 https://izandlasystem.github.io/SSP-Documentation/
 
+Firmware page:
+
+https://izandlasystem.github.io/SSP-Documentation/projects/firmware/
+
 ## Vercel Deployment
 
 Yes, this docs hub can be deployed on Vercel.
