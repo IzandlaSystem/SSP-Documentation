@@ -68,6 +68,8 @@ For Vercel to fetch the private firmware submodule successfully, ensure the proj
 
 GitHub Pages deployment requires the GitHub Actions workflow to authenticate to the private firmware repo.
 
-Add a repository secret named `SUBMODULES_SSH_KEY` containing the private SSH key for a read-only deploy key or machine user that has access to [SSP-S1-Firmware](https://github.com/IzandlaSystem/SSP-S1-Firmware).
+Add a repository secret named `SUBMODULES_PAT` containing a fine-grained personal access token with read access to [SSP-S1-Firmware](https://github.com/IzandlaSystem/SSP-S1-Firmware).
 
 The workflow uses that secret to clone the firmware submodule during the Pages build.
+
+The token only needs repository read access to the private firmware repo.
