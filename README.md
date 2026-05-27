@@ -63,3 +63,11 @@ Use these settings in a Vercel project:
 The config detects `VERCEL` automatically and uses `/` as the base path, so routes work at the root of the Vercel deployment.
 
 For Vercel to fetch the private firmware submodule successfully, ensure the project has access to the private repo and the firmware submodule URL remains the SSH form in [.gitmodules](.gitmodules).
+
+## GitHub Pages Private Submodule Access
+
+GitHub Pages deployment requires the GitHub Actions workflow to authenticate to the private firmware repo.
+
+Add a repository secret named `SUBMODULES_SSH_KEY` containing the private SSH key for a read-only deploy key or machine user that has access to [SSP-S1-Firmware](https://github.com/IzandlaSystem/SSP-S1-Firmware).
+
+The workflow uses that secret to clone the firmware submodule during the Pages build.
