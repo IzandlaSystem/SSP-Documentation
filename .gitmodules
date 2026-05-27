@@ -1,0 +1,21 @@
+# Template file. Populate URLs and enable submodules manually.
+
+[submodule "docs/projects/firmware"]
+	path = docs/projects/firmware
+	url = https://github.com/IzandlaSystem/SSP-S1-Firmware.git
+	branch = main
+
+[submodule "docs/projects/backend"]
+	path = docs/projects/backend
+	url = REPLACE_WITH_BACKEND_REPO_URL
+	branch = main
+
+[submodule "docs/projects/web-frontend"]
+	path = docs/projects/web-frontend
+	url = REPLACE_WITH_WEB_FRONTEND_REPO_URL
+	branch = main
+
+[submodule "docs/projects/mobile-app"]
+	path = docs/projects/mobile-app
+	url = REPLACE_WITH_MOBILE_APP_REPO_URL
+	branch = main
