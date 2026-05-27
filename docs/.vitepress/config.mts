@@ -97,7 +97,7 @@ const sidebar: DefaultTheme.Sidebar = {
     {
       text: 'Firmware (SSP-S1-Firmware)',
       items: [
-        { text: 'Overview', link: '/projects/firmware/' },
+        { text: 'Overview', link: '/projects/firmware/index' },
         { text: 'Architecture', link: '/projects/firmware/#architecture' },
         { text: 'Week 1–4: Core Firmware', link: '/projects/firmware/#week-1-4-core-firmware' },
         {
@@ -188,7 +188,7 @@ export default defineConfig({
     nav: [
       { text: 'Home', link: '/' },
       { text: 'Getting Started', link: '/guide/getting-started' },
-      { text: 'Firmware', link: '/projects/firmware/' },
+      { text: 'Firmware', link: 'https://izandlasystem.github.io/SSP-Documentation/projects/firmware/' },
       { text: 'Backend', link: '/projects/backend/' },
       { text: 'Web Frontend', link: '/projects/web-frontend/' },
       { text: 'Mobile App', link: '/projects/mobile-app/' },

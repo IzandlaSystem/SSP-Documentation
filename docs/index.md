@@ -27,7 +27,7 @@ features:
     description="Zephyr RTOS firmware docs for sensors, BLE 5.3, GPS, and sport modes."
     badge="Firmware"
     icon="🛰️"
-    link="/projects/firmware/"
+    link="https://izandlasystem.github.io/SSP-Documentation/projects/firmware/"
   />
   <ProjectCard
     title="Backend"
