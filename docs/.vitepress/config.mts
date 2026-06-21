@@ -2,6 +2,7 @@ import { defineConfig } from 'vitepress'
 import type { DefaultTheme } from 'vitepress/theme'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { withMermaid } from 'vitepress-plugin-mermaid'
 
 type SidebarGroup = {
   text: string
@@ -163,7 +164,7 @@ const sidebar: DefaultTheme.Sidebar = {
   ],
 }
 
-export default defineConfig({
+export default withMermaid(defineConfig({
   lang: 'en-US',
   title: 'SSP Sports Tracker Docs',
   description: 'Central engineering documentation hub for the SSP Sports Tracker platform.',
@@ -218,4 +219,4 @@ export default defineConfig({
       copyright: 'Copyright © 2026 Izandla Systems',
     },
   },
-})
+}))
