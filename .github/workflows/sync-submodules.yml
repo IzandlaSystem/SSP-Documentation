@@ -13,15 +13,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository with submodules
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          submodules: recursive
-          token: ${{ secrets.SUBMODULES_PAT }}
+
+      - name: Configure Git for private submodules
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.SUBMODULES_PAT }}@github.com/".insteadOf "git@github.com:"
 
       - name: Refresh submodules to latest remote commits
         run: |
+          git submodule update --init --recursive
           git submodule update --remote --merge
 
       - name: Commit updated submodule pointers
