@@ -169,6 +169,7 @@ export default defineConfig({
   appearance: 'dark',
   lastUpdated: true,
   cleanUrls: true,
+  ignoreDeadLinks: true,
   rewrites: rewriteSubmoduleDocs,
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
