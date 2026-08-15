@@ -36,7 +36,7 @@ flowchart TD
 
 The role engine enforces the cascade `ssp_super_admin > organisation_admin > coach > sub_coach > athlete`. Roles are loaded from the `user_roles` table on every request (joined to `roles(name)` with `revoked_at IS NULL`), not from JWT `app_metadata.roles`, so grants take effect immediately without token re-issuance. `isAthlete` does **not** cascade. Requiring `athlete` admits only literal athletes, which is why several routes list both `athlete` and `coach`.
 
-::: info Verification baseline — 2026-08-15
+::: info Verification baseline: 2026-08-15
 These pages were checked against `SSP-API` branch `codex/phase3-api-integration` at commit `01c5a15888d12a6a991e18d082f182ecab3a4b34`, including its pre-existing dirty OTA, telemetry, migration, generated-type, test, and API-documentation changes. `npm test` passes 53/53 tests, production and test TypeScript checks pass, coverage thresholds pass, and a clean temporary `tsup` build succeeds. This audit did not connect to the live Supabase project, apply or inspect live migrations/RLS/Storage, run `vercel dev`, deploy Vercel, invoke the scheduled cron, publish from firmware CI, or exercise a client against a deployed API.
 :::
 

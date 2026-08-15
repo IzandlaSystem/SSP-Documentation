@@ -20,8 +20,8 @@ The approved Steele Athletic Training Centre / SSP graphic standards are binding
 | :--- | :--- | :--- | :--- |
 | Primary (brand blue) | `#003399` | `0 51 153` | `--primary` (light), actions, active nav, primary data, large performance fields |
 | Destructive (brand red) | `#C70000` | `199 0 0` | `--destructive` (light), readable error/destructive text and actions |
-| Mark / live emphasis (brand red) | `#FF0000` | — | `assets/brand/ssp-mark.png` and the **non-text** recording dot only |
-| Brand grey | `#B2B2B2` | — | `DESIGN.md`/`PRODUCT.md` frontmatter; structural neutral role |
+| Mark / live emphasis (brand red) | `#FF0000` | None | `assets/brand/ssp-mark.png` and the **non-text** recording dot only |
+| Brand grey | `#B2B2B2` | None | `DESIGN.md`/`PRODUCT.md` frontmatter; structural neutral role |
 | Dark primary | `#7FA6FF` | `127 166 255` | `--primary` (dark), accessible blue for dark surfaces |
 | Dark destructive | `#FF6B6B` | `255 107 107` | `--destructive` (dark), readable red for dark surfaces |
 
@@ -36,7 +36,7 @@ Status is never communicated by color alone; it is always **icon + text + color*
 
 ---
 
-## Typography — Lato
+## Typography: Lato
 
 The application family on web, iOS, and Android is **Lato**, loaded once in `src/app/_layout.tsx` from `@expo-google-fonts/lato`. Four faces are loaded:
 
@@ -45,7 +45,7 @@ The application family on web, iOS, and Android is **Lato**, loaded once in `src
 | Body / data labels | `Lato_400Regular` | 400 | `--font-body`, `--font-sans` |
 | Emphasis | `Lato_700Bold` | 700 | `--font-body-bold` |
 | Headings / major values / decisive actions | `Lato_900Black` | 900 | `--font-heading` |
-| Spacious display | `Lato_300Light` | 300 | — (limited to high-contrast display moments) |
+| Spacious display | `Lato_300Light` | 300 | None (limited to high-contrast display moments) |
 
 `global.css` declares the font roles inside `@theme inline`:
 
@@ -72,7 +72,7 @@ From `DESIGN.md` frontmatter. Fully rounded shapes are reserved for progress tra
 | :--- | :--- | :--- | :--- |
 | Control | 8 px | `rounded-lg` | Buttons (`button/index.tsx` base `rounded-lg`) |
 | Card | 12 px | `rounded-xl` | Cards (`card/styles.tsx` base `rounded-xl`) |
-| Feature | 16 px | — | Feature summaries |
+| Feature | 16 px | None | Feature summaries |
 
 | Spacing | Value |
 | :--- | :--- |
@@ -121,7 +121,7 @@ export const SEMANTIC_COLORS = {
 
 ---
 
-## `global.css` — Tailwind v4 tokens
+## `global.css`: Tailwind v4 tokens
 
 `global.css` holds the Tailwind v4 theme tokens as **RGB triples** (space-separated, so `rgb(var(--primary))` resolves them). Light defaults live in `:root`; dark defaults live in `@media (prefers-color-scheme: dark) :root` (NativeWind maps this to `Appearance.getColorScheme()` on native) and are re-asserted at higher specificity in `:root.dark` / `:root.light` for the web class toggle.
 
@@ -215,7 +215,7 @@ Minimum touch targets are **48 dp Android / 44 pt iOS**, enforced across the sha
 
 `brand-contract.test.mjs` asserts the auth Switch regex `<Switch[\s\S]*?accessibilityLabel="Remember me"[\s\S]*?className="min-h-12 min-w-12"`. The tab bar uses `NativeTabs tintColor="#003399"` (asserted by the contract).
 
-### Recording dot — brand red, non-text only
+### Recording dot: brand red, non-text only
 
 The live-recording indicator in `src/features/tracker/FirmwareTrackerScreen.tsx` uses inline style `backgroundColor: "#FF0000"`. This is the **non-text** brand red reserved for the official mark and live/recording emphasis. `tracker-ui-source.test.mjs` asserts the brand red appears as `backgroundColor: "#FF0000"` and **not** as `text-[#FF0000]` or `color:`. Never use `#FF0000` for normal-size white text; use `--destructive` (`#C70000`) for readable error/destructive text.
 
@@ -230,7 +230,7 @@ The live-recording indicator in `src/features/tracker/FirmwareTrackerScreen.tsx`
 
 ---
 
-## DESIGN.md — Do's and Don'ts
+## DESIGN.md: Do's and Don'ts
 
 `DESIGN.md` is the directional design spec (frontmatter carries the brand tokens, Lato family, radii, and spacing). The body sets the visual rules summarized below.
 

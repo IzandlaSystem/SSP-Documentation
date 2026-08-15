@@ -105,7 +105,7 @@ relevant sibling doc.
 Two of the `.test.mjs` files do disproportionate work. They are the reason the
 source-contract suite exists.
 
-### `brand-contract.test.mjs` — the forbidden-green / Figtree / ssp-mark / 48dp gate
+### `brand-contract.test.mjs`: the forbidden-green / Figtree / ssp-mark / 48dp gate
 
 This single file pins the visual identity of the app by reading source as
 text. If any of the following regress, `npm test` fails:
@@ -135,7 +135,7 @@ text. If any of the following regress, `npm test` fails:
 
 See [Design System](./design-system) for the full brand spec these tests guard.
 
-### `ux-truth-source.test.mjs` — the truthfulness gate
+### `ux-truth-source.test.mjs`: the truthfulness gate
 
 Where `brand-contract` guards the *look*, `ux-truth-source` guards *what the UI
 claims to do*. It asserts that screens only surface actions that are
@@ -181,7 +181,7 @@ typecheck script).
 | `npx expo run:ios` | Build + launch an iOS **development build** on a simulator or connected device. | Required for real BLE (`react-native-ble-plx` native module). See [Configuration & Build](./configuration). |
 | `npx expo run:android` | Build + launch an Android **development build** on an emulator or connected device. | Required for real BLE on Android. |
 
-### Verified baseline — 2026-08-15
+### Verified baseline: 2026-08-15
 
 Checked on branch `codex/phase0-contracts` at commit `e755d64e8cc4f9c5b0dee7b889f0147c96be12c6`, including the pre-existing local mobile changes documented on the [Overview](./):
 

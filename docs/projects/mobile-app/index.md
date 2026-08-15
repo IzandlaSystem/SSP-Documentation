@@ -12,7 +12,7 @@ The app talks to two backends: **Supabase Auth** for sign-in / sign-up / session
 
 > The repo's `CLAUDE.md` is **stale** and contradicts the actual working tree (it claims a "minimal scaffold", "BLE app deleted", "Figtree font", a "green CTA", and "no test runner", none of which are true). This documentation cites actual source files, not `CLAUDE.md`.
 
-::: info Verification baseline — 2026-08-15
+::: info Verification baseline: 2026-08-15
 These pages were checked against branch `codex/phase0-contracts` at commit `e755d64e8cc4f9c5b0dee7b889f0147c96be12c6`, including the pre-existing local changes in `app.json`, `src/lib/supabase.ts`, untracked `eas.json`, and untracked `assets/brand/feature-graphic.jpg`. Source tests pass (15 Vitest + 149 Node tests). Repository-wide TypeScript and ESLint checks are not green; see [Testing](./testing). No simulator, live Supabase/SSP-API environment, signed build, or physical SSP-S1 was exercised by this source audit.
 :::
 
@@ -93,19 +93,19 @@ flowchart TB
     end
 
     subgraph Services["Service layer"]
-        ApiClient["api.ts<br/><i>hand-rolled fetch — createApiClient</i>"]
+        ApiClient["api.ts<br/><i>hand-rolled fetch: createApiClient</i>"]
         SupabaseClient["supabase.ts<br/><i>@supabase/supabase-js</i>"]
         TrackerService["tracker-service.ts<br/><i>react-native-ble-plx BleManager</i>"]
     end
 
     subgraph Providers["Provider tree (outer → inner)"]
-        Theme["ThemeProvider<br/><i>src/theme.tsx — light/dark/system</i>"]
+        Theme["ThemeProvider<br/><i>src/theme.tsx: light/dark/system</i>"]
         Gluestack["GluestackUIProvider<br/><i>components/ui/gluestack-ui-provider</i>"]
         Tracker["TrackerProvider<br/><i>src/features/tracker/TrackerProvider.tsx</i>"]
         DeviceDemo["DeviceDemoProvider<br/><i>src/features/devices/DeviceDemoProvider.tsx</i>"]
     end
 
-    subgraph UI["UI screens — expo-router file-based routes"]
+    subgraph UI["UI screens: expo-router file-based routes"]
         TopLevel["Top-level (root Stack)<br/>index · auth · onboarding · get-started"]
         Coach["(coach)/ group<br/>home · analytics · squad · profile<br/>+ device · session · team · organisation"]
         Player["(player)/ group<br/>dashboard · analytics · trainer · profile<br/>+ device · session · team · organisation"]

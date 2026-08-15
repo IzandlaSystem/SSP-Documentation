@@ -204,10 +204,10 @@ The handler loads `ctx` via `loadCallerContext`, validates team access with `can
 | :--- | :--- | :---: | :--- |
 | `title` | string | yes | min `3`, max `200` |
 | `team_id` | uuid | yes | caller must pass `canAccessTeam` |
-| `sport_id` | uuid | yes | — |
-| `classification_id` | uuid | yes | — |
+| `sport_id` | uuid | yes | None |
+| `classification_id` | uuid | yes | None |
 | `planned_start_at` | ISO 8601 datetime | yes | `z.string().datetime()` |
-| `source_device_id` | uuid | no | — |
+| `source_device_id` | uuid | no | None |
 | `description` | string | no | max `2000` |
 | `scheduled_date` | ISO date | no | `z.string().date()` |
 
@@ -403,8 +403,8 @@ Adds an athlete as a session participant with `status: 'enrolled'`. `organisatio
 
 | Field | Type | Required | Constraints |
 | :--- | :--- | :---: | :--- |
-| `athlete_id` | uuid | yes | — |
-| `device_assignment_id` | uuid | no | — |
+| `athlete_id` | uuid | yes | None |
+| `device_assignment_id` | uuid | no | None |
 
 ### Response (`201 Created`)
 

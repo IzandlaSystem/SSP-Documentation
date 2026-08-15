@@ -17,7 +17,7 @@ flowchart TB
     end
 
     subgraph Edge["Vercel Functions (Node.js Serverless)"]
-        Gateway["SSP-API Gateway<br/><i>Hono single entry — src/app.ts</i>"]
+        Gateway["SSP-API Gateway<br/><i>Hono single entry: src/app.ts</i>"]
     end
 
     subgraph Cloud["Supabase Backend Cloud"]
@@ -52,7 +52,7 @@ The API is one Hono application assembled in `src/app.ts` and exported as the Ve
 
 ```ts
 export const app = routedApp;
-export default app;          // Vercel entry — one default export
+export default app;          // Vercel entry: one default export
 export type AppType = typeof app;  // typed client contract
 ```
 
@@ -267,7 +267,7 @@ The gateway is the only service that talks to Postgres, and it does so with the 
 SSP-API/
 ├── src/
 │   ├── app.ts             Hono app: CORS, logger, /health, /internal, route mount chain, onError, AppType export
-│   ├── index.ts           Contract entry — re-exports AppType + role model (tsup bundles to dist/)
+│   ├── index.ts           Contract entry: re-exports AppType + role model (tsup bundles to dist/)
 │   ├── lib/
 │   │   ├── supabase.ts        Cached service-role Supabase client (persistSession:false, autoRefreshToken:false)
 │   │   ├── context.ts         CallerContext: primary_organisation_id + teamIds
@@ -279,7 +279,7 @@ SSP-API/
 │   ├── middleware/
 │   │   ├── auth.ts            JWT verification (jose) + live role loading from user_roles
 │   │   ├── requireRoles.ts    Cascading role gate (401 unauth / 403 forbidden)
-│   │   └── error.ts           onError — { error } envelope, 500
+│   │   └── error.ts           onError: { error } envelope, 500
 │   ├── routes/                One file per resource (users, organisations, teams, athletes, coaches,
 │   │                          devices, firmware-releases, sessions, metrics, workload, goals,
 │   │                          benchmarks, notifications, analytics, ingest, internal)

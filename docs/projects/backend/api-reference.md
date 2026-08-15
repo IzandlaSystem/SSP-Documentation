@@ -60,7 +60,7 @@ The mount list below is confirmed verbatim from `src/app.ts`. A common doc-locat
 | `analytics` | `/` (root) | `routes/analytics.ts` | `/teams/:id/analytics`, `/athletes/:id/analytics` |
 | `ingest` | `/` (root) | `routes/ingest.ts` | `/sessions/:id/ingest-url`, `/sessions/:id/complete`, `/sessions/:id/sync`, `/sessions/:id/telemetry` |
 | `internal` | `/internal` | `routes/internal.ts` | `/internal/firmware-releases`, `/internal/parse/:sessionId`, `/internal/parse/pending` |
-| standalone | — | `src/app.ts` | `GET /health` |
+| standalone | None | `src/app.ts` | `GET /health` |
 
 `/health` and `/internal` are mounted **before** the JWT routers so wildcard auth middleware can never intercept them.
 
@@ -100,7 +100,7 @@ The mount list below is confirmed verbatim from `src/app.ts`. A common doc-locat
 
 ---
 
-# Phase 1 — Core routes
+# Phase 1: Core routes
 
 The identity, roster, device, session, metrics, workload, goal, benchmark, notification, and analytics handlers.
 
@@ -108,7 +108,7 @@ The identity, roster, device, session, metrics, workload, goal, benchmark, notif
 
 | Method | Full path | Auth | Required roles | Body schema | Success | Source file | Phase | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/health` | Public | none | — | `200` | `src/app.ts` | 1 | Returns `{ ok: true }`. Standalone handler mounted before auth routers. |
+| `GET` | `/health` | Public | none | None | `200` | `src/app.ts` | 1 | Returns `{ ok: true }`. Standalone handler mounted before auth routers. |
 
 [Deployment and runtime details](./architecture#deployment--environment)
 
@@ -120,7 +120,7 @@ The identity, roster, device, session, metrics, workload, goal, benchmark, notif
 
 | Method | Full path | Auth | Required roles | Body schema | Success | Source file | Phase | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/me` | JWT | none | — | `200` | `routes/users.ts` | 1 | Returns `{ ...usersRow, roles }` (`id, email, phone, full_name, avatar_url, primary_organisation_id, is_active` + merged `user.roles`). |
+| `GET` | `/me` | JWT | none | None | `200` | `routes/users.ts` | 1 | Returns `{ ...usersRow, roles }` (`id, email, phone, full_name, avatar_url, primary_organisation_id, is_active` + merged `user.roles`). |
 | `PATCH` | `/me` | JWT | none | `patchMe` (safeParse) | `200` | `routes/users.ts` | 1 | `full_name? max200`, `avatar_url? url max500`, `phone? max50`. Manual `safeParse` → `400 { error:'Invalid body', issues }`. |
 
 ---
@@ -131,8 +131,8 @@ The identity, roster, device, session, metrics, workload, goal, benchmark, notif
 
 | Method | Full path | Auth | Required roles | Body schema | Success | Source file | Phase | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/organisations` | JWT | `ssp_super_admin` | — | `200` | `routes/organisations.ts` | 1 | Cross-tenant list; `requireRoles('ssp_super_admin')`. |
-| `GET` | `/organisations/:id` | JWT | none (manual) | — | `200` | `routes/organisations.ts` | 1 | Super admin **or** `ctx.primaryOrganisationId === id`. 403 Forbidden / 404 Not found. |
+| `GET` | `/organisations` | JWT | `ssp_super_admin` | None | `200` | `routes/organisations.ts` | 1 | Cross-tenant list; `requireRoles('ssp_super_admin')`. |
+| `GET` | `/organisations/:id` | JWT | none (manual) | None | `200` | `routes/organisations.ts` | 1 | Super admin **or** `ctx.primaryOrganisationId === id`. 403 Forbidden / 404 Not found. |
 
 ---
 
@@ -142,9 +142,9 @@ The identity, roster, device, session, metrics, workload, goal, benchmark, notif
 
 | Method | Full path | Auth | Required roles | Body schema | Success | Source file | Phase | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/teams` | JWT | none (manual) | — | `200` | `routes/teams.ts` | 1 | Query `organisation_id` (defaults to `ctx.primaryOrganisationId`). Non-super-admin with no primary org and no explicit filter reaches an unscoped query. |
-| `GET` | `/teams/:id` | JWT | none (manual) | — | `200` | `routes/teams.ts` | 1 | `hasTeamResourceAccess(user, id)` gate. 403 / 404. |
-| `GET` | `/teams/:id/roster` | JWT | none (manual) | — | `200` | `routes/teams.ts` | 1 | `hasTeamResourceAccess` gate. Returns `team_memberships` joined to `athletes(*)`, `coaches(*)` where `left_at is null`. |
+| `GET` | `/teams` | JWT | none (manual) | None | `200` | `routes/teams.ts` | 1 | Query `organisation_id` (defaults to `ctx.primaryOrganisationId`). Non-super-admin with no primary org and no explicit filter reaches an unscoped query. |
+| `GET` | `/teams/:id` | JWT | none (manual) | None | `200` | `routes/teams.ts` | 1 | `hasTeamResourceAccess(user, id)` gate. 403 / 404. |
+| `GET` | `/teams/:id/roster` | JWT | none (manual) | None | `200` | `routes/teams.ts` | 1 | `hasTeamResourceAccess` gate. Returns `team_memberships` joined to `athletes(*)`, `coaches(*)` where `left_at is null`. |
 | `POST` | `/teams` | JWT | `organisation_admin`, `ssp_super_admin` | `createTeam` (zValidator) | `201` | `routes/teams.ts` | 1 | Non-super-admin requires `hasOrgAccess(..., body.organisation_id)`. |
 | `POST` | `/teams/:id/members` | JWT | `organisation_admin`, `ssp_super_admin` | `addTeamMember` (zValidator) | `201` | `routes/teams.ts` | 1 | `hasTeamResourceAccess(user, teamId)` gate. 404 `'Team not found'`. Inserts `team_id, organisation_id, sport_id (from team, nullable), athlete_id, coach_id, role_in_team, assigned_by_user_id`. |
 
@@ -156,8 +156,8 @@ The identity, roster, device, session, metrics, workload, goal, benchmark, notif
 
 | Method | Full path | Auth | Required roles | Body schema | Success | Source file | Phase | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/athletes` | JWT | `coach`, `organisation_admin`, `ssp_super_admin` | — | `200` | `routes/athletes.ts` | 1 | Query `team_id`, `organisation_id`; no-primary-org callers can reach an unscoped query, and `team_id` is not separately authorized. |
-| `GET` | `/athletes/:id` | JWT | none (manual) | — | `200` | `routes/athletes.ts` | 1 | Self, any literal org/super admin, or coach in a shared team. Organisation admins are not target-org checked. |
+| `GET` | `/athletes` | JWT | `coach`, `organisation_admin`, `ssp_super_admin` | None | `200` | `routes/athletes.ts` | 1 | Query `team_id`, `organisation_id`; no-primary-org callers can reach an unscoped query, and `team_id` is not separately authorized. |
+| `GET` | `/athletes/:id` | JWT | none (manual) | None | `200` | `routes/athletes.ts` | 1 | Self, any literal org/super admin, or coach in a shared team. Organisation admins are not target-org checked. |
 | `POST` | `/athletes` | JWT | `organisation_admin`, `ssp_super_admin` | `createAthlete` (zValidator) | `201` | `routes/athletes.ts` | 1 | No org-scope check on insert (relies on role gate + DB). |
 | `PATCH` | `/athletes/:id` | JWT | none (manual) | `updateAthlete` (safeParse) | `200` | `routes/athletes.ts` | 1 | Self or any literal org/super admin; organisation admins are not target-org checked. |
 
@@ -169,7 +169,7 @@ The identity, roster, device, session, metrics, workload, goal, benchmark, notif
 
 | Method | Full path | Auth | Required roles | Body schema | Success | Source file | Phase | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/coaches` | JWT | `organisation_admin`, `ssp_super_admin` | — | `200` | `routes/coaches.ts` | 1 | Query `organisation_id` (defaults to `ctx.primaryOrganisationId`). `!hasOrgAccess` → 403. Filters via `organisation_memberships.coach_id` where `left_at is null`. |
+| `GET` | `/coaches` | JWT | `organisation_admin`, `ssp_super_admin` | None | `200` | `routes/coaches.ts` | 1 | Query `organisation_id` (defaults to `ctx.primaryOrganisationId`). `!hasOrgAccess` → 403. Filters via `organisation_memberships.coach_id` where `left_at is null`. |
 | `POST` | `/coaches` | JWT | `organisation_admin`, `ssp_super_admin` | `createCoach` (zValidator) | `201` | `routes/coaches.ts` | 1 | No org-scope check on insert. |
 
 ---
@@ -180,15 +180,15 @@ The identity, roster, device, session, metrics, workload, goal, benchmark, notif
 
 | Method | Full path | Auth | Required roles | Body schema | Success | Source file | Phase | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/devices` | JWT | `coach`, `organisation_admin`, `ssp_super_admin` | — | `200` | `routes/devices.ts` | 1 | Query `organisation_id` (defaults to `ctx.primaryOrganisationId`). Org-scope check; `eq('organisation_id', …)`. |
-| `GET` | `/devices/:id` | JWT | none (manual) | — | `200` | `routes/devices.ts` | 1 | `hasOrgAccess(roles, ctx.primaryOrganisationId, data.organisation_id)`. Selects `*, device_assignments(*), pairing_states(*)`. 403 / 404. |
+| `GET` | `/devices` | JWT | `coach`, `organisation_admin`, `ssp_super_admin` | None | `200` | `routes/devices.ts` | 1 | Query `organisation_id` (defaults to `ctx.primaryOrganisationId`). Org-scope check; `eq('organisation_id', …)`. |
+| `GET` | `/devices/:id` | JWT | none (manual) | None | `200` | `routes/devices.ts` | 1 | `hasOrgAccess(roles, ctx.primaryOrganisationId, data.organisation_id)`. Selects `*, device_assignments(*), pairing_states(*)`. 403 / 404. |
 | `POST` | `/devices` | JWT | `organisation_admin`, `ssp_super_admin` | `createDevice` (zValidator) | `201` | `routes/devices.ts` | 1 | Org-scope check against `body.organisation_id`. |
 | `PATCH` | `/devices/:id` | JWT | `organisation_admin`, `ssp_super_admin` | `updateDevice` (zValidator) | `200` | `routes/devices.ts` | 1 | Loads device `organisation_id`, checks `hasOrgAccess`. 403 / 404. |
 | `POST` | `/devices/:id/pair` | JWT | `athlete`, `coach`, `organisation_admin`, `ssp_super_admin` | `pairDevice` (zValidator) | `201` | `routes/devices.ts` | 1 | Revokes prior active pairing, inserts new `pairing_states` (`bond_status:'bonded'`, `paired_user_id: user.id`). 404 if device missing. |
-| `POST` | `/devices/:id/unpair` | JWT | none (manual) | — | `200` | `routes/devices.ts` | 1 | No `requireRoles`; any authenticated user with org access can unpair. Returns `{ ok: true }`. |
+| `POST` | `/devices/:id/unpair` | JWT | none (manual) | None | `200` | `routes/devices.ts` | 1 | No `requireRoles`; any authenticated user with org access can unpair. Returns `{ ok: true }`. |
 | `POST` | `/devices/:id/assign` | JWT | `organisation_admin`, `ssp_super_admin` | `assignDevice` (zValidator) | `201` | `routes/devices.ts` | 1 | Inserts `device_id, athlete_id, organisation_id, assigned_by_user_id`. 404 if device missing. |
-| `DELETE` | `/devices/:id/assign` | JWT | `organisation_admin`, `ssp_super_admin` | — | `200` | `routes/devices.ts` | 1 | Sets `unassigned_at` on current active assignment. Returns `{ ok: true, unassigned: <row|null> }`. |
-| `GET` | `/devices/:id/firmware-update` | JWT | none (manual) | — | `200` | `routes/devices.ts` | 3 | Server offer contract; no current mobile caller/DFU transport. Selects by exact compatibility fields and `version_code desc`; signed URL TTL 15 minutes. |
+| `DELETE` | `/devices/:id/assign` | JWT | `organisation_admin`, `ssp_super_admin` | None | `200` | `routes/devices.ts` | 1 | Sets `unassigned_at` on current active assignment. Returns `{ ok: true, unassigned: <row|null> }`. |
+| `GET` | `/devices/:id/firmware-update` | JWT | none (manual) | None | `200` | `routes/devices.ts` | 3 | Server offer contract; no current mobile caller/DFU transport. Selects by exact compatibility fields and `version_code desc`; signed URL TTL 15 minutes. |
 | `POST` | `/devices/:id/firmware-update/status` | JWT | none (manual) | `reportFirmwareUpdate` (zValidator) | `200` | `routes/devices.ts` | 3 | Reporter-trusted progress. `confirmed` updates stored device version without independent boot/image attestation; no current mobile caller. |
 
 ---
@@ -199,16 +199,16 @@ The identity, roster, device, session, metrics, workload, goal, benchmark, notif
 
 | Method | Full path | Auth | Required roles | Body schema | Success | Source file | Phase | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/sessions` | JWT | none (manual filter) | — | `200` | `routes/sessions.ts` | 1 | Query via `sessionListQuery.parse`; invalid values currently become 500. Visibility filtering happens **after** DB `range`, so a page can contain fewer than `limit` visible rows and later visible rows can be skipped. |
-| `GET` | `/sessions/:id` | JWT | none (manual: `loadSessionAccess`) | — | `200` | `routes/sessions.ts` | 1 | Selects `*, session_participants(*), session_summaries(*)`. 403 / 404. |
+| `GET` | `/sessions` | JWT | none (manual filter) | None | `200` | `routes/sessions.ts` | 1 | Query via `sessionListQuery.parse`; invalid values currently become 500. Visibility filtering happens **after** DB `range`, so a page can contain fewer than `limit` visible rows and later visible rows can be skipped. |
+| `GET` | `/sessions/:id` | JWT | none (manual: `loadSessionAccess`) | None | `200` | `routes/sessions.ts` | 1 | Selects `*, session_participants(*), session_summaries(*)`. 403 / 404. |
 | `POST` | `/sessions` | JWT | `coach`, `organisation_admin`, `ssp_super_admin` | `createSession` (zValidator) | `201` | `routes/sessions.ts` | 1 | `canAccessTeam(user, body.team_id)`. Requires `ctx.primaryOrganisationId` (else 400 `'User has no primary organisation'`). Inserts `created_by_user_id, organisation_id, status:'ready', sync_status:'pending'`. |
 | `PATCH` | `/sessions/:id` | JWT | `coach`, `organisation_admin`, `ssp_super_admin` | `updateSession` (zValidator) | `200` | `routes/sessions.ts` | 1 | `loadSessionAccess` gate. 403 / 404. |
 | `POST` | `/sessions/:id/start` | JWT | `athlete`, `coach`, `organisation_admin`, `ssp_super_admin` | `startSession` (zValidator) | `200` | `routes/sessions.ts` | 1 | `loadSessionAccess` gate. Sets `status:'recording'`, `actual_start_at: now`, `firmware_session_id`, `firmware_sport_code`. Athletes can start. |
-| `POST` | `/sessions/:id/pause` | JWT | `athlete`, `coach`, `organisation_admin`, `ssp_super_admin` | — | `200` | `routes/sessions.ts` | 1 | No body validator. Sets `status:'paused'`. |
+| `POST` | `/sessions/:id/pause` | JWT | `athlete`, `coach`, `organisation_admin`, `ssp_super_admin` | None | `200` | `routes/sessions.ts` | 1 | No body validator. Sets `status:'paused'`. |
 | `POST` | `/sessions/:id/stop` | JWT | `athlete`, `coach`, `organisation_admin`, `ssp_super_admin` | `stopSession` (zValidator) | `200` | `routes/sessions.ts` | 1 | Sets `status:'ended'`, `actual_end_at`, `data_point_count`. |
 | `POST` | `/sessions/:id/participants` | JWT | `coach`, `organisation_admin`, `ssp_super_admin` | `addParticipant` (zValidator) | `201` | `routes/sessions.ts` | 1 | `loadSessionAccess` gate. Inserts `session_participants` (`status:'enrolled'`, `added_by_user_id`, `organisation_id` from session access). |
-| `DELETE` | `/sessions/:id/participants/:athleteId` | JWT | `coach`, `organisation_admin`, `ssp_super_admin` | — | `200` | `routes/sessions.ts` | 1 | `loadSessionAccess` gate. Returns `{ ok: true }`. |
-| `DELETE` | `/sessions/:id` | JWT | none (manual) | — | `200` | `routes/sessions.ts` | 1 | Creator or any literal organisation/super admin. No `loadSessionAccess` or target-org comparison. |
+| `DELETE` | `/sessions/:id/participants/:athleteId` | JWT | `coach`, `organisation_admin`, `ssp_super_admin` | None | `200` | `routes/sessions.ts` | 1 | `loadSessionAccess` gate. Returns `{ ok: true }`. |
+| `DELETE` | `/sessions/:id` | JWT | none (manual) | None | `200` | `routes/sessions.ts` | 1 | Creator or any literal organisation/super admin. No `loadSessionAccess` or target-org comparison. |
 
 ---
 
@@ -218,10 +218,10 @@ The identity, roster, device, session, metrics, workload, goal, benchmark, notif
 
 | Method | Full path | Auth | Required roles | Body schema | Success | Source file | Phase | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/sessions/:id/metrics` | JWT | none (manual: `ensureSessionAccess`) | — | `200` | `routes/metrics.ts` | 1 | Returns `{ metrics: [...] }` from `session_athlete_metrics` `eq('session_id', id)`. 403 if denied. |
-| `GET` | `/sessions/:id/metrics/:athleteId` | JWT | none (manual) | — | `200` | `routes/metrics.ts` | 1 | `ensureSessionAccess` + `ensureAthleteAccess`; admin/coach pass, while an athlete must own the metric. 404 if no row. |
-| `GET` | `/sessions/:id/summary` | JWT | none (manual: `ensureSessionAccess`) | — | `200` | `routes/metrics.ts` | 1 | Returns single `session_summaries` row. 403 / 404. |
-| `GET` | `/sessions/:id/targets` | JWT | `coach`, `organisation_admin`, `ssp_super_admin` | — | `200` | `routes/metrics.ts` | 1 | `ensureSessionAccess`. Returns `{ targets: [...] }` from `session_targets`. |
+| `GET` | `/sessions/:id/metrics` | JWT | none (manual: `ensureSessionAccess`) | None | `200` | `routes/metrics.ts` | 1 | Returns `{ metrics: [...] }` from `session_athlete_metrics` `eq('session_id', id)`. 403 if denied. |
+| `GET` | `/sessions/:id/metrics/:athleteId` | JWT | none (manual) | None | `200` | `routes/metrics.ts` | 1 | `ensureSessionAccess` + `ensureAthleteAccess`; admin/coach pass, while an athlete must own the metric. 404 if no row. |
+| `GET` | `/sessions/:id/summary` | JWT | none (manual: `ensureSessionAccess`) | None | `200` | `routes/metrics.ts` | 1 | Returns single `session_summaries` row. 403 / 404. |
+| `GET` | `/sessions/:id/targets` | JWT | `coach`, `organisation_admin`, `ssp_super_admin` | None | `200` | `routes/metrics.ts` | 1 | `ensureSessionAccess`. Returns `{ targets: [...] }` from `session_targets`. |
 | `POST` | `/sessions/:id/targets` | JWT | `coach`, `organisation_admin`, `ssp_super_admin` | `createTarget` (zValidator) | `201` | `routes/metrics.ts` | 1 | `loadSessionAccess`. Inserts `session_id, athlete_id, organisation_id, ...body`. 404 if session missing. |
 | `PATCH` | `/sessions/:id/targets/:targetId` | JWT | `coach`, `organisation_admin`, `ssp_super_admin` | `updateTarget` (zValidator) | `200` | `routes/metrics.ts` | 1 | `loadSessionAccess`; verifies target exists for session. 403 / 404. |
 
@@ -233,7 +233,7 @@ The identity, roster, device, session, metrics, workload, goal, benchmark, notif
 
 | Method | Full path | Auth | Required roles | Body schema | Success | Source file | Phase | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/athletes/:id/workload` | JWT | none (manual: `canSeeAthlete`) | — | `200` | `routes/workload.ts` | 1 | org admin/super admin pass; self (athlete's `user_id === user.id`); coach via shared team. Query `from`, `to` (optional). Returns `{ workload: [...] }` from `workload_readiness`, optional `gte('recorded_at', from)` / `lte('recorded_at', to)`, ordered `recorded_at asc`. |
+| `GET` | `/athletes/:id/workload` | JWT | none (manual: `canSeeAthlete`) | None | `200` | `routes/workload.ts` | 1 | org admin/super admin pass; self (athlete's `user_id === user.id`); coach via shared team. Query `from`, `to` (optional). Returns `{ workload: [...] }` from `workload_readiness`, optional `gte('recorded_at', from)` / `lte('recorded_at', to)`, ordered `recorded_at asc`. |
 
 ---
 
@@ -243,7 +243,7 @@ The identity, roster, device, session, metrics, workload, goal, benchmark, notif
 
 | Method | Full path | Auth | Required roles | Body schema | Success | Source file | Phase | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/goals` | JWT | none (manual) | — | `200` | `routes/goals.ts` | 1 | Query `team_id`, `athlete_id`. Non-super-admins scoped to `ctx.primaryOrganisationId`. Pure athletes (no coach/admin role) filtered to their own athlete id (in-memory post-query). `hasTeamAccess`/`hasOrgAccess` imported but `void`ed (unused). |
+| `GET` | `/goals` | JWT | none (manual) | None | `200` | `routes/goals.ts` | 1 | Query `team_id`, `athlete_id`. Non-super-admins scoped to `ctx.primaryOrganisationId`. Pure athletes (no coach/admin role) filtered to their own athlete id (in-memory post-query). `hasTeamAccess`/`hasOrgAccess` imported but `void`ed (unused). |
 | `POST` | `/goals` | JWT | `coach`, `organisation_admin`, `ssp_super_admin` | `createGoal` (zValidator) | `201` | `routes/goals.ts` | 1 | Org-scope check. Adds `created_by_user_id`. |
 | `PATCH` | `/goals/:id` | JWT | `coach`, `organisation_admin`, `ssp_super_admin` | `updateGoal` (zValidator) | `200` | `routes/goals.ts` | 1 | Org-scope check against existing goal's `organisation_id`. 403 / 404. |
 
@@ -255,7 +255,7 @@ The identity, roster, device, session, metrics, workload, goal, benchmark, notif
 
 | Method | Full path | Auth | Required roles | Body schema | Success | Source file | Phase | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/benchmarks` | JWT | `coach`, `organisation_admin`, `ssp_super_admin` | — | `200` | `routes/benchmarks.ts` | 1 | Query `sport_id`, `team_id`, `position_label`. Non-super-admins scoped to `ctx.primaryOrganisationId`. Optional `eq` filters for the three query params. |
+| `GET` | `/benchmarks` | JWT | `coach`, `organisation_admin`, `ssp_super_admin` | None | `200` | `routes/benchmarks.ts` | 1 | Query `sport_id`, `team_id`, `position_label`. Non-super-admins scoped to `ctx.primaryOrganisationId`. Optional `eq` filters for the three query params. |
 
 ---
 
@@ -265,8 +265,8 @@ The identity, roster, device, session, metrics, workload, goal, benchmark, notif
 
 | Method | Full path | Auth | Required roles | Body schema | Success | Source file | Phase | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/notifications` | JWT | none | — | `200` | `routes/notifications.ts` | 1 | Query `unread` (`'true'` → `is('read_at', null)`). Recipient-scoped (`recipient_user_id === user.id`), ordered `created_at desc`. |
-| `PATCH` | `/notifications/:id/read` | JWT | none | — | `200` | `routes/notifications.ts` | 1 | Marks `read_at: now`, scoped to `recipient_user_id === user.id` (404 if no row matched). |
+| `GET` | `/notifications` | JWT | none | None | `200` | `routes/notifications.ts` | 1 | Query `unread` (`'true'` → `is('read_at', null)`). Recipient-scoped (`recipient_user_id === user.id`), ordered `created_at desc`. |
+| `PATCH` | `/notifications/:id/read` | JWT | none | None | `200` | `routes/notifications.ts` | 1 | Marks `read_at: now`, scoped to `recipient_user_id === user.id` (404 if no row matched). |
 
 ---
 
@@ -276,12 +276,12 @@ The identity, roster, device, session, metrics, workload, goal, benchmark, notif
 
 | Method | Full path | Auth | Required roles | Body schema | Success | Source file | Phase | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `GET` | `/teams/:id/analytics` | JWT | `coach`, `organisation_admin`, `ssp_super_admin` | — | `200` | `routes/analytics.ts` | 1 | `hasTeamResourceAccess` gate. Query `from`, `to`. Pulls session ids for team in window, then `session_athlete_metrics` (`distance_meters, max_speed_mps, sprint_count, workload_index`). Returns `{ team_id, session_count, squad_avg_load, avg_distance_meters, top_metrics: [...] }` (or nulls/empty array when no sessions). |
-| `GET` | `/athletes/:id/analytics` | JWT | none (manual) | — | `200` | `routes/analytics.ts` | 1 | admin/self/coach-shared-team. Query `from`, `to`. Returns `{ athlete_id, trend: [...] }` from `session_athlete_metrics` `eq('athlete_id', id)`, ordered `recorded_at asc`. |
+| `GET` | `/teams/:id/analytics` | JWT | `coach`, `organisation_admin`, `ssp_super_admin` | None | `200` | `routes/analytics.ts` | 1 | `hasTeamResourceAccess` gate. Query `from`, `to`. Pulls session ids for team in window, then `session_athlete_metrics` (`distance_meters, max_speed_mps, sprint_count, workload_index`). Returns `{ team_id, session_count, squad_avg_load, avg_distance_meters, top_metrics: [...] }` (or nulls/empty array when no sessions). |
+| `GET` | `/athletes/:id/analytics` | JWT | none (manual) | None | `200` | `routes/analytics.ts` | 1 | admin/self/coach-shared-team. Query `from`, `to`. Returns `{ athlete_id, trend: [...] }` from `session_athlete_metrics` `eq('athlete_id', id)`, ordered `recorded_at asc`. |
 
 ---
 
-# Phase 3 — Telemetry & OTA routes
+# Phase 3: Telemetry & OTA routes
 
 The ingest pipeline, retry-safe same-payload upserts, and firmware-release publishing handlers. The parser's queue claim is not atomic. Phase 2 was skipped/deferred.
 
@@ -293,8 +293,8 @@ The ingest pipeline, retry-safe same-payload upserts, and firmware-release publi
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | `POST` | `/sessions/:id/ingest-url` | JWT | none (manual: `loadSessionAccess`) | `createIngestUpload` (safeParse, empty `{}` ok) | `201` | `routes/ingest.ts` | 3 | Builds storage path `${org_id}/${sessionId}/${uuid}.${ext}`; `createSignedUploadUrl`. Creates `sync_records` (`source_type:'mobile_app'`, `entity_type:'session'`, `sync_status:'pending'`, format/compression). If athlete, looks up `athletes.id` for `athlete_id`. Returns `{ sync_id, bucket, path, signed_url, token, expires_in: 7200, format, compression }`. `400 { error:'Invalid body', issues:[{path,message}] }`. |
 | `POST` | `/sessions/:id/complete` | JWT | none (manual: `loadSessionAccess`) | `completeIngest` (safeParse, empty `{}` ok) | `200` | `routes/ingest.ts` | 3 | Finds sync record by `sync_id` or latest pending for session. Idempotent if `sync_status === 'completed'`. Else sets `sync_status:'in_progress'`, `attempted_at: now`, `payload_size_bytes`/`point_count`, and session `sync_status:'in_progress'`, `status:'syncing'`. 409 `'Sync record has no Storage object'` if `!storage_bucket || !storage_path`. Returns `{ ok: true, sync: <updatedSync> }`. |
-| `GET` | `/sessions/:id/sync` | JWT | none (manual: `loadSessionAccess`) | — | `200` | `routes/ingest.ts` | 3 | Lists `sync_records` for session, ordered `created_at desc`. Returns `{ session_id, sync_status, records }` (`sync_status` defaults to `'pending'` if no records). |
-| `GET` | `/sessions/:id/telemetry` | JWT | none (manual: `loadSessionAccess`) | — | `200` | `routes/ingest.ts` | 3 | Query via `telemetryListQuery` `safeParse` (`athlete_id?`, `after_index` default -1, `limit` default 1000 max 5000). `gte('point_index', after_index + 1)`, ordered `point_index asc`, `limit`. `has_more = points.length === limit`. `400 { error:'Invalid query', issues }`. Returns `{ session_id, points, next_after_index, has_more }` selecting `athlete_id, point_index, timestamp, latitude, longitude, speed_mps, accel_magnitude, impact_count, step_count_delta, data_quality_status`. |
+| `GET` | `/sessions/:id/sync` | JWT | none (manual: `loadSessionAccess`) | None | `200` | `routes/ingest.ts` | 3 | Lists `sync_records` for session, ordered `created_at desc`. Returns `{ session_id, sync_status, records }` (`sync_status` defaults to `'pending'` if no records). |
+| `GET` | `/sessions/:id/telemetry` | JWT | none (manual: `loadSessionAccess`) | None | `200` | `routes/ingest.ts` | 3 | Query via `telemetryListQuery` `safeParse` (`athlete_id?`, `after_index` default -1, `limit` default 1000 max 5000). `gte('point_index', after_index + 1)`, ordered `point_index asc`, `limit`. `has_more = points.length === limit`. `400 { error:'Invalid query', issues }`. Returns `{ session_id, points, next_after_index, has_more }` selecting `athlete_id, point_index, timestamp, latitude, longitude, speed_mps, accel_magnitude, impact_count, step_count_delta, data_quality_status`. |
 
 ---
 
@@ -317,7 +317,7 @@ Two publish paths call the same `storeFirmwareRelease` helper. The JWT path reco
 
 | Method | Full path | Auth | Required roles | Body schema | Success | Source file | Phase | Notes |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `POST` | `/internal/parse/:sessionId` | CRON_SECRET | n/a | — | `200` | `routes/internal.ts` | 3 | Manual/id-specific invocation. Runs `processTelemetry(sessionId)`. Returns `{ ok, processed, session_id?, sync_id?, point_count?, athlete_count? }` or `{ ok, processed:false, message }` or `{ error }` (500). 401 if secret missing/wrong. |
-| `GET` | `/internal/parse/pending` | CRON_SECRET | n/a | — | `200` | `routes/internal.ts` | 3 | Vercel Cron entry. Runs `processTelemetry('pending')`, which claims the single oldest `in_progress`/`failed` sync across **all** sessions (no `session_id` filter). Same response shapes as above. 401 if secret missing/wrong. |
+| `POST` | `/internal/parse/:sessionId` | CRON_SECRET | n/a | None | `200` | `routes/internal.ts` | 3 | Manual/id-specific invocation. Runs `processTelemetry(sessionId)`. Returns `{ ok, processed, session_id?, sync_id?, point_count?, athlete_count? }` or `{ ok, processed:false, message }` or `{ error }` (500). 401 if secret missing/wrong. |
+| `GET` | `/internal/parse/pending` | CRON_SECRET | n/a | None | `200` | `routes/internal.ts` | 3 | Vercel Cron entry. Runs `processTelemetry('pending')`, which claims the single oldest `in_progress`/`failed` sync across **all** sessions (no `session_id` filter). Same response shapes as above. 401 if secret missing/wrong. |
 
 See [Ingestion Pipeline](./ingestion-pipeline) for the implemented telemetry flow and [Firmware OTA](./firmware-ota) for the server-side OTA contract and its open client/device gates. `/internal/parse/pending` is not session-specific; concurrent cron runs could race on the same sync record because the `sync_status` claim update is the only guard.

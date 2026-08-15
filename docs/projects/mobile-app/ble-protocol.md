@@ -52,7 +52,7 @@ All multi-byte fields are **little-endian**. Offsets are relative to the charact
 | `0x04` | SESSION_CONTROL | write | `SESSION_COMMAND`: start `[0x01]`, stop `[0x02]`, list `[0x10]`, download `[0x11, sid_u16_LE]`. | `0x01` START, `0x02` STOP, `0x03` DELETE (stub), `0x04` STREAM `[0x04, sid_u32_LE]`. | **Major.** Download is `0x11` + **u16** in code vs `0x04` + **u32** in spec. Code has **no** `0x03` DELETE. Code adds `0x10` list (spec reads the list via 0x03 directly). |
 | `0x05` | SESSION_DATA | notify | `parseSessionDownloadEvent`. `0x01` chunk (payload = `bytes.slice(1)`, requires ≥ 2 B); `0x00` complete (**7 B**: `firmwareSessionId` u16 LE @1, `totalBytes` u32 LE @3); `0xff` error (**4 B**: `firmwareSessionId` u16 LE @1, `code` u8 @3). Chunk payloads are concatenated and parsed as a v2 firmware session via `parseFirmwareSession`. | 10-byte chunk headers (message_type, session_id **u32**, chunk_index, total_chunks, point_count) + 36-byte `session_data_point_t`. EOS 9 B `[0x00, sid_u32, 0x0000, 0x0000]`; error 6 B `[0xFF, sid_u32, err]`. | **Major.** Code uses **u16** session IDs (7 B complete / 4 B error) vs spec **u32** (9 B / 6 B). Code chunks are raw v2-firmware-session bytes (no chunk_index/total_chunks/point_count header), not the spec's 36-byte point stream. |
 | `0x06` | AGPS | write | `buildReferenceLocationRequest` → 23 B. The 4-byte `0x20` result is parsed from the **0x05 SESSION_DATA notification**, not from a 0x06 subscription. See [A-GPS reference location](#a-gps-reference-location-0x06). | 0x06 A-GPS. | The request uses 0x06, while the mobile service multiplexes the acknowledgement onto 0x05. |
-| `0x07` | DFU Control | — | **Not implemented.** No UUID constant, no parser, no builder in `protocol.ts`. | Spec references a DFU Control characteristic. | **Major.** DFU does not exist in code. |
+| `0x07` | DFU Control | None | **Not implemented.** No UUID constant, no parser, no builder in `protocol.ts`. | Spec references a DFU Control characteristic. | **Major.** DFU does not exist in code. |
 | `0x08` | LIVE_DATA | notify | `parseLiveSample`. IMU `0x01` (**21 B**) / GNSS `0x02` (requires ≥ **23 B** and ignores any trailing bytes). See [Live data](#live-data-0x08). | New 0x08: IMU 0x01 21 B, GPS 0x02 43 B. | IMU matches. **GNSS encoding differs**: code parses the first 23 B as scaled integers (int32 lat/lng ÷1e7, int16 alt ÷100, u16 speed ÷100, u64 timestamp, u8 satellites, u8 valid); spec describes a 43-byte IEEE-float layout (float64 lat/lng, float32 alt/speed/heading/hdop, u8 satellites/fix_valid @33/34, int64 timestamp @35). Code exposes no heading/hdop. |
 
 ---
@@ -84,7 +84,7 @@ All multi-byte fields are **little-endian**. Offsets are relative to the charact
 | 9 | 2 | altitudeMeters | i16 LE | ÷ 100 → metres. |
 | 11 | 2 | speedMps | u16 LE | ÷ 100 → m/s. |
 | 13 | 8 | timestampMs | u64 LE | safe-integer check. |
-| 21 | 1 | satellites | u8 | — |
+| 21 | 1 | satellites | u8 | None |
 | 22 | 1 | valid | u8 | `!== 0` → fix valid. |
 
 The parser throws `Unknown live sample type` for any other byte-0 value.
@@ -98,13 +98,13 @@ The parser throws `Unknown live sample type` for any other byte-0 value.
 | Offset | Size | Field | Type | Value |
 | :---: | :---: | :--- | :--- | :--- |
 | 0 | 1 | subtype | u8 | `1` |
-| 1 | 1 | — | u8 | `1` |
+| 1 | 1 | None | u8 | `1` |
 | 2 | 2 | requestId | u16 LE | caller-supplied. |
 | 4 | 4 | latitude | i32 LE | `round(lat * 1e7)`. |
 | 8 | 4 | longitude | i32 LE | `round(lng * 1e7)`. |
 | 12 | 2 | altitudeMeters | i16 LE | `round(altitude)`. |
 | 14 | 2 | horizontalAccuracyMeters | u16 LE | `ceil(accuracy)`. |
-| 16 | 1 | — | u8 | `68` (firmware constant). |
+| 16 | 1 | None | u8 | `68` (firmware constant). |
 | 17 | 4 | unixEpochSeconds | u32 LE | `floor(epoch)`. |
 | 21 | 2 | timeUncertaintyMs | u16 LE | `ceil(uncertainty)`. |
 
@@ -148,7 +148,7 @@ Download chunks from 0x05 are concatenated and handed to `parseFirmwareSession`,
 | 13 | 1 | hdop | u8 | |
 | 14 | 1 | satellites | u8 | |
 | 15 | 1 | valid | u8 | `!== 0`. |
-| 16 | 1 | unused | — | Not read by the parser. `approximateUptimeMs` is reconstructed in memory from the last IMU `uptimeMs`; it is not decoded from this byte. |
+| 16 | 1 | unused | None | Not read by the parser. `approximateUptimeMs` is reconstructed in memory from the last IMU `uptimeMs`; it is not decoded from this byte. |
 
 ---
 

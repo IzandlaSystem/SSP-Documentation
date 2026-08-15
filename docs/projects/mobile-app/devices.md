@@ -8,13 +8,13 @@ outline: deep
 
 The Devices feature is **Demo/mock only**. It lets coaches and athletes browse a simulated SSP-S1 tracker inventory, pair/rename/assign trackers, sync sessions, and check for firmware updates, all without contacting any hardware.
 
-This is enforced by a source-contract test (`device-ui-source.test.mjs`, `forbiddenDeviceImport` regex): the `src/features/devices/**` tree must **not** import `react-native-ble-plx`, Supabase, AsyncStorage, or any BLE/DFU service. Every Bluetooth-style action is simulated with a fixed `DEMO_DELAY_MS = 650` timer and a truthfulness disclosure ("Demo complete — no hardware was contacted.") Real device BLE (GATT connect, session record/download, A-GPS assist, signed-URL upload) lives in the Tracker feature; see [Live Tracking & Sync](./tracker-and-sync). The "Open hardware connection" banner in Device Hub links to the real firmware flow at `/(role)/device/firmware`.
+This is enforced by a source-contract test (`device-ui-source.test.mjs`, `forbiddenDeviceImport` regex): the `src/features/devices/**` tree must **not** import `react-native-ble-plx`, Supabase, AsyncStorage, or any BLE/DFU service. Every Bluetooth-style action is simulated with a fixed `DEMO_DELAY_MS = 650` timer and a truthfulness disclosure (`"Demo complete \u2014 no hardware was contacted."`, with the code point escaped here). Real device BLE (GATT connect, session record/download, A-GPS assist, signed-URL upload) lives in the Tracker feature; see [Live Tracking & Sync](./tracker-and-sync). The "Open hardware connection" banner in Device Hub links to the real firmware flow at `/(role)/device/firmware`.
 
 The backend [Devices API](../backend/routes/devices) (`/devices`, `/devices/:id/pair`, `/devices/:id/assign`, `/devices/:id/firmware-update`) is the server contract for tracker registration, pairing bonds, and OTA offers. The mobile Devices feature does **not** call that API; it is self-contained mock state. The Tracker feature calls session/ingestion gateway routes, but it does not implement the Devices API or an OTA/DFU client.
 
 ---
 
-## 1. Provider — `DeviceDemoProvider`
+## 1. Provider: `DeviceDemoProvider`
 
 **Source:** `src/features/devices/DeviceDemoProvider.tsx`
 
@@ -57,7 +57,7 @@ flowchart LR
 
 ---
 
-## 2. State — `device-state.ts`
+## 2. State: `device-state.ts`
 
 **Source:** `src/features/devices/device-state.ts`
 
@@ -70,7 +70,7 @@ A pure reducer + selector module. It imports `mock-devices.ts` with an explicit 
 | `deviceAdded` | Registers a discovered device; player-owned (ownerPlayerId + personal account org), coach-org-owned otherwise. Rejects duplicates via `getDeviceAddResult`. |
 | `deviceAssigned` | Coach-only; sets `assignedPlayerId` + appends an "assigned" activity. Ignored for player. |
 | `deviceRenamed` | Trims + validates name (≤40 chars), updates name + "renamed" activity. |
-| `connectionChanged` | Sets `connectionStatus` + "connected" activity labelled "Demo connection {status} — no hardware contacted". |
+| `connectionChanged` | Sets `connectionStatus` + "connected" activity labelled `"Demo connection {status} \u2014 no hardware contacted"` (code point escaped). |
 | `deviceSynced` | Clears `pendingSessionUploads` and `sessionSlotsUsed`, sets `lastSyncedAt`, "synced" activity. |
 | `deviceUpdated` | Sets `firmwareVersion` to `availableFirmwareVersion`, "updated" activity. |
 | `deviceUnlinked` | Removes the device (unknown ids leave state unchanged). |
@@ -104,7 +104,7 @@ A pure reducer + selector module. It imports `mock-devices.ts` with an explicit 
 
 ---
 
-## 3. Types — `types.ts`
+## 3. Types: `types.ts`
 
 **Source:** `src/features/devices/types.ts`
 
@@ -126,7 +126,7 @@ A pure reducer + selector module. It imports `mock-devices.ts` with an explicit 
 
 ---
 
-## 4. Fixtures — `mock-devices.ts`
+## 4. Fixtures: `mock-devices.ts`
 
 **Source:** `src/features/devices/mock-devices.ts`
 
@@ -225,7 +225,7 @@ Concurrency guards: `updatingRef` rejects a second `startUpdate` while one is in
 
 **Source:** `src/features/devices/components/DemoModeBanner.tsx`
 
-An `Alert` (no `action`, no `variant="outline"`) with `AlertIcon as={Info}` and `text-foreground`: "Demo mode — Bluetooth actions are simulated in this preview. Device inventory and actions below are simulated. Hardware connection opens the live firmware flow." Supports a `compact` variant used by Details/AddDevice.
+An `Alert` (no `action`, no `variant="outline"`) with `AlertIcon as={Info}` and `text-foreground` uses `"Demo mode \u2014 Bluetooth actions are simulated in this preview. Device inventory and actions below are simulated. Hardware connection opens the live firmware flow."` (code point escaped). It supports a `compact` variant used by Details/AddDevice.
 
 ### 6.3 `DeviceRow`
 

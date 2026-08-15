@@ -75,7 +75,7 @@ import type { AppType } from 'ssp-api';
 
 export const api = hc<AppType>(baseUrl);
 
-// fully typed — wrong field → TS error, response typed
+// fully typed: wrong field → TS error, response typed
 const res = await api.sessions.$post({
   json: { title, team_id, sport_id, classification_id, planned_start_at },
 });

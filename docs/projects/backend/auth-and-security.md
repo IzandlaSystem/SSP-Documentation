@@ -333,12 +333,12 @@ These gaps should be fixed and regression-tested before treating the gateway as 
 
 SSP-API has two authentication modes, plus a public health check.
 
-### 1. JWT (Supabase token) — default
+### 1. JWT (Supabase token): default
 
 Every route router except `internal.ts` applies the `auth` middleware to `'*'`.
 The `firmware-releases` router additionally applies `requireRoles('ssp_super_admin')`.
 
-### 2. Shared-secret — `/internal/*` only
+### 2. Shared-secret: `/internal/*` only
 
 `/internal` (`src/routes/internal.ts`) does **not** use `auth` at all. It
 defines its own middleware that selects a secret per request:
@@ -366,7 +366,7 @@ if (!authorized) return c.json({ error: 'Unauthorized' }, 401);
 - The secret is compared as a literal string against the `x-cron-secret`
   header or the `Authorization: Bearer <secret>` header.
 
-### 3. Public — `/health`
+### 3. Public: `/health`
 
 `/health` is a standalone handler registered on `routedApp` **before** any
 auth-protected router:
@@ -419,25 +419,25 @@ export const onError: ErrorHandler = (err, c) => {
 ### Auth/authorization error shapes
 
 ```json
-// 401 — missing or malformed Authorization header
+// 401: missing or malformed Authorization header
 { "error": "Missing or malformed Authorization header" }
 
-// 401 — verify failure / expired
+// 401: verify failure / expired
 { "error": "Invalid or expired token" }
 
-// 401 — valid token but no sub
+// 401: valid token but no sub
 { "error": "Token missing subject" }
 
-// 401 — requireRoles with no user on context
+// 401: requireRoles with no user on context
 { "error": "Not authenticated" }
 
-// 401 — internal shared-secret mismatch / unset secret
+// 401: internal shared-secret mismatch / unset secret
 { "error": "Unauthorized" }
 
-// 403 — insufficient role (or fail-closed empty roles after DB error)
+// 403: insufficient role (or fail-closed empty roles after DB error)
 { "error": "Forbidden" }
 
-// 500 — unhandled
+// 500: unhandled
 { "error": "<message>" }
 ```
 

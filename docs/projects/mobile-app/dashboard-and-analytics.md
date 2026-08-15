@@ -63,7 +63,7 @@ Source: `src/components/dashboard/ScreenHeader.tsx`.
 
 Both Home screens share the same shell and the same top-of-page order: **PerformanceSummaryCard → DeviceReadinessCard → role-specific card → GoalProgressList → MetricStrip**. This order is enforced by `ux-truth-source.test.mjs` (Performance before DeviceReadiness before Goals).
 
-### Coach Home — `src/app/(coach)/(tabs)/home.tsx`
+### Coach Home: `src/app/(coach)/(tabs)/home.tsx`
 
 `CoachHomeScreen` uses `useDeviceDemo` + `selectDeviceReadiness`, `useApiMe`, and the Supabase user for the first-name greeting.
 
@@ -73,7 +73,7 @@ flowchart TD
     B --> C["DeviceReadinessCard<br/>→ /(coach)/device"]
     C --> D["Next session card<br/>MOCK_NEXT_SESSION"]
     D --> E["GoalProgressList<br/>WEEKLY_GOALS from MOCK_TARGETS []"]
-    E --> F["MetricStrip — Team health<br/>from MOCK_PLAYERS []"]
+    E --> F["MetricStrip: Team health<br/>from MOCK_PLAYERS []"]
 ```
 
 | Card | Data | Notes |
@@ -84,7 +84,7 @@ flowchart TD
 | GoalProgressList | `MOCK_TARGETS` (empty) | weekly goals |
 | MetricStrip | `MOCK_PLAYERS` (empty) | Average weekly load + Need attention |
 
-### Player Home — `src/app/(player)/(tabs)/dashboard.tsx`
+### Player Home: `src/app/(player)/(tabs)/dashboard.tsx`
 
 `PlayerDashboardScreen` mirrors the coach shell with player-scoped data.
 
@@ -183,7 +183,7 @@ All geometry is kept finite for empty/one-point/flat/negative/normal inputs (tes
 
 | Prop | Default | Notes |
 | :--- | :--- | :--- |
-| `data` | — | `{ label, value }[]` |
+| `data` | None | `{ label, value }[]` |
 | `sort` | `"desc"` | `"none"` preserves input order (used for ordinal workload zones Low → Med → High → Max) |
 | `unit` | `"%"` | Suffix on value and accessibility label |
 
@@ -222,7 +222,7 @@ The session history list and session detail screen are the only dashboard surfac
 | Truthfulness | No `MOCK_TRAINING_SESSIONS` / `getSessionById`; preserves the real API UUID (test-enforced) |
 | Detail | `SettingsGroup` with Date/Start/End/Duration/Type/Venue/Coach (+ Attendance for coach) |
 
-### Routes — `src/app/(role)/session/[id].tsx`
+### Routes: `src/app/(role)/session/[id].tsx`
 
 Both role routes are thin wrappers using `useLocalSearchParams` and `router.replace` (**no** `router.back`).
 
@@ -314,7 +314,7 @@ Source: `src/components/dashboard/FootballPitchHeatmap.tsx`, `heatmap-density.ts
 
 Both Analytics tabs are identical in chart structure and differ only in the data source (`MOCK_COACH_ANALYTICS` vs `MOCK_PLAYER_ANALYTICS`) and the player-only feedback feed. Charts use the empty `MOCK_*` ranges; **only** the `SessionHistorySection` is API-fed (`useApiSessions`).
 
-### Coach — `src/app/(coach)/(tabs)/analytics.tsx`
+### Coach: `src/app/(coach)/(tabs)/analytics.tsx`
 
 ```mermaid
 flowchart TD
@@ -331,7 +331,7 @@ flowchart TD
 - `SessionHistorySection` wired to `useApiSessions()`: loading/error passed through; `onSelect` pushes `/(coach)/session/[id]`.
 - "Top performers" renders `MOCK_LEADERBOARD` (empty) via `LeaderboardRow`.
 
-### Player — `src/app/(player)/(tabs)/analytics.tsx`
+### Player: `src/app/(player)/(tabs)/analytics.tsx`
 
 Mirrors the coach screen using `MOCK_PLAYER_ANALYTICS`, default range `week`, and adds a trailing `CoachFeedbackFeed` bound to `MOCK_COACH_FEEDBACK` (empty → "No coach feedback yet"). `onSelect` pushes `/(player)/session/[id]`.
 

@@ -38,7 +38,7 @@ flowchart LR
 
 ---
 
-## `app.json` — Expo app metadata
+## `app.json`: Expo app metadata
 
 Source: `app.json`.
 
@@ -88,7 +88,7 @@ Android declares **11 permission entries**: six Bluetooth/location permissions a
 
 ---
 
-## `eas.json` — Build & submit profiles
+## `eas.json`: Build & submit profiles
 
 Source: `eas.json`.
 
@@ -96,14 +96,14 @@ The CLI is pinned to `>= 14.0.0` and reads app versions from the remote EAS proj
 
 | Profile | `developmentClient` | `distribution` | Android `buildType` | `autoIncrement` | Use |
 | :--- | :---: | :--- | :--- | :--- | :--- |
-| `development` | `true` | `internal` | (default) | — | Internal development-client profile for `eas build --profile development`; BLE-capable after install |
-| `preview` | — | `internal` | `apk` | — | Shareable APK for QA |
-| `production` | — | (default) | `app-bundle` | `true` | Production profile; Android outputs an AAB, and auto-increment is profile-wide |
+| `development` | `true` | `internal` | (default) | None | Internal development-client profile for `eas build --profile development`; BLE-capable after install |
+| `preview` | None | `internal` | `apk` | None | Shareable APK for QA |
+| `production` | None | (default) | `app-bundle` | `true` | Production profile; Android outputs an AAB, and auto-increment is profile-wide |
 
 The `submit.production` block targets the Android `internal` track, so production Android builds submit to Google Play's internal testing lane by default. iOS submission is not configured in `eas.json`. `package.json` does not currently list `expo-dev-client`, so the EAS `developmentClient: true` profile has not been validated as a launcher-enabled development client by this source audit; local `expo run:*` commands still produce native development builds.
 
 ```bash
-# Build a dev client (required for BLE — see below)
+# Build a dev client (required for BLE: see below)
 eas build --profile development --platform ios
 eas build --profile development --platform android
 
@@ -131,7 +131,7 @@ Source: `.env.example` as the committed template, plus the static `process.env.E
 
 Expo CLI statically replaces these references while bundling JavaScript. In local development, edit the env value and perform a full reload of the development build; a native rebuild is only required when native code/config changes. Production binaries or immutable updates must be rebuilt/re-exported to embed changed values. `EXPO_PUBLIC_*` values are visible in the compiled app, so they must never contain secrets. `.env.example` is a committed template, not a runtime file and not proof of the values used by a deployed build.
 
-### `EXPO_PUBLIC_FORCE_DASHBOARD` — referenced in code, not in `.env.example`
+### `EXPO_PUBLIC_FORCE_DASHBOARD`: referenced in code, not in `.env.example`
 
 `src/app/index.tsx` reads `process.env.EXPO_PUBLIC_FORCE_DASHBOARD` to short-circuit the entry gate straight to `/(coach)/(tabs)/home` (used for fast dashboard iteration during development). **This variable is NOT listed in `.env.example`.** Developers who need it must add it to their local `.env.local` manually; it is a dev convenience and should never be set in a shipping build. The entry gate is documented in [Auth & Onboarding](./auth-and-onboarding).
 
@@ -160,7 +160,7 @@ Both fields pin the dependency under npm (`overrides`) and tooling that honors Y
 
 ---
 
-## `tsconfig.json` — TypeScript config
+## `tsconfig.json`: TypeScript config
 
 Source: `tsconfig.json`.
 

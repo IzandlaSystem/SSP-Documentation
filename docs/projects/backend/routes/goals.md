@@ -79,10 +79,10 @@ Validated with `zValidator('json', createGoal)`. The schema enforces `.refine(v 
 | `title` | `string` | yes | min 1, max 200. |
 | `description` | `string` | no | max 2000. |
 | `category` | `string` | no | max 100. |
-| `target_value` | `number` | no | — |
-| `current_value` | `number` | no | — |
+| `target_value` | `number` | no | None |
+| `current_value` | `number` | no | None |
 | `unit` | `string` | no | max 50. |
-| `deadline` | `string` (ISO date `YYYY-MM-DD`) | no | — |
+| `deadline` | `string` (ISO date `YYYY-MM-DD`) | no | None |
 
 ```json
 {
@@ -130,7 +130,7 @@ Validated with `zValidator('json', updateGoal)`. All fields optional.
 
 | Field | Type | Required | Constraints |
 | :--- | :--- | :--- | :--- |
-| `current_value` | `number` | no | — |
+| `current_value` | `number` | no | None |
 | `status` | `string` (enum) | no | One of `On Track`, `At Risk`, `Achieved`, `Behind`. |
 
 ```json

@@ -32,7 +32,7 @@ sequenceDiagram
     participant DB as Postgres
     participant Cron as Vercel Cron / Worker
 
-    Note over Mobile,Gateway: Upload side — JWT, loadSessionAccess
+    Note over Mobile,Gateway: Upload side: JWT, loadSessionAccess
     Mobile->>Gateway: POST /sessions/:id/ingest-url { format, compression }
     Gateway->>Gateway: loadSessionAccess(user, sessionId)
     Gateway->>Storage: createSignedUploadUrl(org_id/sessionId/uuid.ext)
@@ -44,7 +44,7 @@ sequenceDiagram
     Gateway->>DB: UPDATE sync_records (sync_status: 'in_progress') & sessions (status: 'syncing')
     Gateway-->>Mobile: 200 { ok: true, sync }
 
-    Note over Cron,DB: Parser side — CRON_SECRET
+    Note over Cron,DB: Parser side: CRON_SECRET
     Cron->>Gateway: GET /internal/parse/pending (x-cron-secret)  %% or POST /internal/parse/:sessionId
     Gateway->>DB: findSync → claim oldest in_progress/failed sync (sync_status: 'in_progress')
     Gateway->>Storage: download blob
@@ -242,7 +242,7 @@ Both handlers return the `processTelemetry` result body verbatim:
 
 ---
 
-## `processTelemetry` — the 20-step flow
+## `processTelemetry`: the 20-step flow
 
 `processTelemetry(sessionIdParam)` is the shared worker. When `sessionIdParam
 === 'pending'`, `findSync` omits the `eq('session_id', …)` filter so it claims

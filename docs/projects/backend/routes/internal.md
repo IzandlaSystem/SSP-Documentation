@@ -177,7 +177,7 @@ Same response shapes as [Parse Session Telemetry](#2-parse-session-telemetry-pos
 
 ---
 
-## `processTelemetry` — Worker Flow
+## `processTelemetry`: Worker Flow
 
 Both parse routes call `processTelemetry(sessionIdParam)`. The `pending` path passes the literal string `'pending'`, which `findSync` treats specially (no `eq('session_id')` filter); any other value is used as the `session_id` filter. At a high level:
 

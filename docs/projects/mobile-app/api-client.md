@@ -30,7 +30,7 @@ flowchart LR
 
 ---
 
-## 1. The client — `src/lib/api.ts`
+## 1. The client: `src/lib/api.ts`
 
 ### `createApiClient({ baseUrl, getAccessToken, fetchImpl })`
 
@@ -83,7 +83,7 @@ export const api = createApiClient({
 - **`getAccessToken`:** pulls the Supabase Auth JWT (`session.access_token`) from the persisted Supabase session. The gateway verifies this JWT server-side (see [Backend Auth & Security](../backend/auth-and-security)).
 - **`ApiClient`** is exported as `ReturnType<typeof createApiClient>` for typing the client in tests or providers.
 
-### `uploadToSignedUrl` — the no-bearer PUT
+### `uploadToSignedUrl`: the no-bearer PUT
 
 The one method that does **not** go through `request<T>`:
 
@@ -176,7 +176,7 @@ This is a client method but not a gateway route, so it is not counted in the 28 
 
 ---
 
-## 4. Session adapter — `src/lib/api-session-adapter.ts`
+## 4. Session adapter: `src/lib/api-session-adapter.ts`
 
 The gateway returns raw `ApiSession` / `ApiSessionMetric[]` / `ApiTelemetryPoint[]`. The dashboard UI renders `MockTrainingSession` (the shared session shape from `src/components/dashboard/session-history.ts`). The adapter bridges the two.
 
@@ -196,7 +196,7 @@ The adapter is the only place raw API shapes are translated for the UI. It does 
 
 ---
 
-## 5. Supabase client — `src/lib/supabase.ts`
+## 5. Supabase client: `src/lib/supabase.ts`
 
 The Supabase client provides **auth only** on the mobile side. All data reads/writes go through the gateway `api`, not PostgREST.
 
@@ -219,7 +219,7 @@ import { AppState, Platform } from "react-native";
 
 The thrown error is `"Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY / EXPO_PUBLIC_SUPABASE_ANON_KEY"`. The app will not boot without these (see [Configuration](./configuration)). The `api.getAccessToken` token provider reads the access token this client persists.
 
-### Session role helper — `src/lib/session.ts`
+### Session role helper: `src/lib/session.ts`
 
 `Role` is `"coach" | "player"` (the UI role, distinct from `ApiRole`). `getUserRole()` resolves it in priority order:
 
@@ -235,7 +235,7 @@ The thrown error is `"Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_P
 
 Three data hooks carry real API data into the UI: `useApiMe`, `useApiSessions`, and `useApiSession`. `useRoleGuard` is also documented below, but it reads the local/Supabase role helper rather than fetching gateway data. Per the [mock-vs-real contract](./dashboard-and-analytics), the dashboard charts still use empty `MOCK_*` arrays.
 
-### `useApiMe()` — `src/hooks/use-api-me.ts`
+### `useApiMe()`: `src/hooks/use-api-me.ts`
 
 ```ts
 export function useApiMe(): { data: ApiMe | null; error: string | null }
@@ -243,7 +243,7 @@ export function useApiMe(): { data: ApiMe | null; error: string | null }
 
 Calls `api.getMe()` once on mount, sets `data` on success or `error` (the `Error`/`ApiError` message, else `"Unable to load profile."`) on failure. Uses an `active` flag so a fast unmount doesn't setState after teardown. Used by the coach/player profile screens and the home identity cards.
 
-### `useApiSessions()` / `useApiSession(sessionId, athleteId?)` — `src/hooks/use-api-sessions.ts`
+### `useApiSessions()` / `useApiSession(sessionId, athleteId?)`: `src/hooks/use-api-sessions.ts`
 
 **`useApiSessions()`** returns `{ data: MockTrainingSession[]; loading: boolean; error: string | null }`:
 
@@ -263,7 +263,7 @@ Used by `SessionHistorySection` on both coach and player analytics screens. This
 
 Used by `SessionDetailScreen` (the bounded Previous/Next detail view). The 5000-point telemetry cap feeds the heatmap; `telemetryToHeatPoints` normalizes it.
 
-### `useRoleGuard(allowedRole)` — `src/hooks/useRoleGuard.ts`
+### `useRoleGuard(allowedRole)`: `src/hooks/useRoleGuard.ts`
 
 ```ts
 export function useRoleGuard(allowedRole: Role): void

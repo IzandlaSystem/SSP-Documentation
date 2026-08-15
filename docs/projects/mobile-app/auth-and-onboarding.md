@@ -153,7 +153,7 @@ and end the gate):
 5. **Route.** `player` → `/(player)/(tabs)/dashboard`; otherwise
    `/(coach)/(tabs)/home`.
 
-### `src/lib/session.ts` — role mapping
+### `src/lib/session.ts`: role mapping
 
 The app's UI knows exactly two roles, `Role = "coach" | "player"`. The backend
 `ApiRole` set is `athlete | coach | sub_coach | organisation_admin |
@@ -170,9 +170,9 @@ export async function getUserRole(): Promise<Role> {
 
 | Source | Key | Mapping | Default |
 | :--- | :--- | :--- | :--- |
-| Supabase `user.user_metadata.role` | `role` | `coach`→coach; `athlete`/`player`→player | — |
-| AsyncStorage | `"user-role"` | literal `coach` / `player` | — |
-| Fallback | — | — | `coach` |
+| Supabase `user.user_metadata.role` | `role` | `coach`→coach; `athlete`/`player`→player | None |
+| AsyncStorage | `"user-role"` | literal `coach` / `player` | None |
+| Fallback | None | None | `coach` |
 
 The runtime path in `auth.tsx` / `index.tsx` is **API-authoritative**
 (`api.getMe().roles`), and `getUserRole` is the persisted fallback used only
@@ -184,7 +184,7 @@ ssp_super_admin) resolves to the coach information architecture.
 `user_metadata` and AsyncStorage are client-controlled and are used here only to choose the mobile information architecture. They must never authorize API data or actions. The SSP-API independently verifies the bearer JWT and loads database-backed roles for every protected request.
 :::
 
-### `src/lib/session.ts` — helpers
+### `src/lib/session.ts`: helpers
 
 | Helper | Behavior |
 | :--- | :--- |
@@ -375,7 +375,7 @@ are labelled `(invite only)` and surface an invite-required Modal on continue.
 | `FadeIn` | Renders children un-animated. | `opacity 0→1, y 12→0`, tween `duration: 0.2` + `delay`. |
 | `MotionCard` | Plain `Pressable` (`min-h-12`). | Staggered entrance + tween scale-down on press (`scale: 0.97`). |
 | `ProgressBar` | `transition: { duration: 0 }`. | tween `duration: 0.2`. |
-| `ReduceMotionProvider` | Context flag from `AccessibilityInfo.isReduceMotionEnabled()`. | — |
+| `ReduceMotionProvider` | Context flag from `AccessibilityInfo.isReduceMotionEnabled()`. | None |
 
 The screen's `AnimatePresence` + `Motion.View` step transition uses
 `reduceMotion ? { duration: 0, type: "tween" } : { duration: 0.22, type: "tween" }`
@@ -387,7 +387,7 @@ The screen's `AnimatePresence` + `Motion.View` step transition uses
 
 Source: `src/lib/logout.ts`, `src/components/dashboard/LogoutSettingsRow.tsx`.
 
-### `logoutLocalSession(deps)` — failure-tolerant, navigate last
+### `logoutLocalSession(deps)`: failure-tolerant, navigate last
 
 ```ts
 export async function logoutLocalSession(deps: LogoutDependencies) {

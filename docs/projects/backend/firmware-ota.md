@@ -39,7 +39,7 @@ sequenceDiagram
             CI->>Gateway: POST /internal/firmware-releases (FIRMWARE_RELEASE_SECRET)
             Gateway->>Gateway: storeFirmwareRelease(body, null)
         end
-        Gateway->>Storage: Upload artifact (.bin) — upsert:false
+        Gateway->>Storage: Upload artifact (.bin): upsert:false
         Gateway->>DB: INSERT firmware_releases (sha256, file_size, storage_path, created_by_user_id?)
         Gateway-->>Admin: 201 Created (release row)
     end
@@ -214,7 +214,7 @@ The handler short-circuits with `update_available: false` when:
 - `device.protocol_version` is null/empty: `{ update_available: false, current_version, reason: 'Device protocol version is unknown' }`.
 - No release matched, **or** `release.version === device.firmware_version`, **or** `device.firmware_version_code !== null && release.version_code <= device.firmware_version_code`: `{ update_available: false, current_version }`.
 
-### Response (`200 OK` — update available)
+### Response (`200 OK`: update available)
 
 A signed download URL is minted via `db().storage.from(release.storage_bucket).createSignedUrl(release.storage_path, FIRMWARE_DOWNLOAD_TTL_SECONDS)`. `storage_bucket` and `storage_path` are stripped from the `release` object before it is returned.
 
@@ -242,7 +242,7 @@ A signed download URL is minted via `db().storage.from(release.storage_bucket).c
 }
 ```
 
-### Response (`200 OK` — no update)
+### Response (`200 OK`: no update)
 
 ```json
 {

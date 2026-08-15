@@ -211,7 +211,7 @@ Creates a new target row for a session. Inserts `session_id` (from the path), `a
 
 | Field | Type | Required | Constraints |
 | :--- | :--- | :--- | :--- |
-| `athlete_id` | `uuid` | optional | &mdash; |
+| `athlete_id` | `uuid` | optional | None |
 | `target_scope` | `enum` | required | one of `squad`, `group`, `individual` |
 | `target_group_label` | `string` | optional | max 100 chars |
 | `target_distance_meters` | `integer` | optional | min 0 |

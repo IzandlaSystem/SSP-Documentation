@@ -442,7 +442,7 @@ The release is **skipped** (treated as not an update) when either:
 
 When an update is available, a signed Storage download URL is created with a TTL of `FIRMWARE_DOWNLOAD_TTL_SECONDS` (900 seconds / 15 minutes). `storage_bucket` and `storage_path` are stripped from the release object before it is returned.
 
-### Response (`200 OK`) — update available
+### Response (`200 OK`): update available
 
 ```json
 {
@@ -468,7 +468,7 @@ When an update is available, a signed Storage download URL is created with a TTL
 }
 ```
 
-### Response (`200 OK`) — no update available
+### Response (`200 OK`): no update available
 
 ```json
 {
@@ -477,7 +477,7 @@ When an update is available, a signed Storage download URL is created with a TTL
 }
 ```
 
-### Response (`200 OK`) — device protocol version unknown
+### Response (`200 OK`): device protocol version unknown
 
 When the device has no `protocol_version`, the handler short-circuits before querying releases and returns a `reason`:
 
