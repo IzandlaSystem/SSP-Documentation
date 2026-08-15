@@ -169,20 +169,34 @@ const sidebar: DefaultTheme.Sidebar = {
   ],
   '/projects/mobile-app/': [
     {
-      text: 'Mobile App (mobile-app-repo)',
+      text: 'Mobile App Overview',
       items: [
         { text: 'Overview', link: '/projects/mobile-app/' },
-        { text: 'Architecture', link: '/projects/mobile-app/#architecture' },
-        { text: 'Week 1–3: Setup & BLE', link: '/projects/mobile-app/#week-1-3-setup-and-ble' },
-        { text: 'Week 4–6: Auth & Devices', link: '/projects/mobile-app/#week-4-6-auth-and-devices' },
-        {
-          text: 'Week 7–9: Real-Time Tracking',
-          link: '/projects/mobile-app/#week-7-9-real-time-tracking',
-        },
-        {
-          text: 'Week 10–12: Analytics & Export',
-          link: '/projects/mobile-app/#week-10-12-analytics-and-export',
-        },
+        { text: 'Architecture & Navigation', link: '/projects/mobile-app/architecture' },
+        { text: 'Configuration & Build', link: '/projects/mobile-app/configuration' },
+      ],
+    },
+    {
+      text: 'Protocol & Tracking',
+      items: [
+        { text: 'BLE GATT Protocol', link: '/projects/mobile-app/ble-protocol' },
+        { text: 'Live Tracking & Sync', link: '/projects/mobile-app/tracker-and-sync' },
+      ],
+    },
+    {
+      text: 'Data & Screens',
+      items: [
+        { text: 'API Client', link: '/projects/mobile-app/api-client' },
+        { text: 'Auth & Onboarding', link: '/projects/mobile-app/auth-and-onboarding' },
+        { text: 'Device Management', link: '/projects/mobile-app/devices' },
+        { text: 'Dashboard & Analytics', link: '/projects/mobile-app/dashboard-and-analytics' },
+      ],
+    },
+    {
+      text: 'Engineering',
+      items: [
+        { text: 'Design System', link: '/projects/mobile-app/design-system' },
+        { text: 'Testing', link: '/projects/mobile-app/testing' },
       ],
     },
   ],
