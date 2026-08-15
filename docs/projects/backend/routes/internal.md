@@ -6,7 +6,7 @@ outline: deep
 
 # Internal API (Phase 3)
 
-The Internal API exposes the machine/worker side of Phase 3: a CI path for publishing firmware releases and a Vercel Cron / manual entry point for parsing uploaded telemetry blobs into derived metrics. It is mounted at `/internal` (`src/routes/internal.ts`) and is **never JWT-authenticated** — access is controlled entirely by shared secrets.
+The Internal API exposes the machine/worker side of Phase 3: a CI path for publishing firmware releases and a Vercel Cron / manual entry point for parsing uploaded telemetry blobs into derived metrics. It is mounted at `/internal` (`src/routes/internal.ts`) and is **never JWT-authenticated**; access is controlled entirely by shared secrets.
 
 These routes consume work produced by the JWT-gated ingestion flow (the `sync_records` rows and Storage objects created by `POST /sessions/:id/ingest-url` + `POST /sessions/:id/complete`). See [Ingestion Pipeline](../ingestion-pipeline) for the upload side, and [Auth & Security](../auth-and-security) for the two auth modes.
 
@@ -21,7 +21,7 @@ Every `/internal/*` request passes through a mount-level middleware that picks t
 - **Failure:** any unauthorized request returns `401 { error: 'Unauthorized' }` with no further processing.
 - **Unset secret caveat:** if the relevant secret env var is unset, `!!secret` is false and that route **always** returns `401`, regardless of the headers sent. There is no fallback.
 
-There are no roles on this surface — possession of the secret is the only credential. See [Auth & Security](../auth-and-security).
+There are no roles on this surface; possession of the secret is the only credential. See [Auth & Security](../auth-and-security).
 
 ---
 
@@ -32,12 +32,12 @@ Publishes a firmware release from a CI / machine context. This is the shared-sec
 - **Path:** `/internal/firmware-releases`
 - **Method:** `POST`
 - **Auth:** `FIRMWARE_RELEASE_SECRET` (via `x-cron-secret` header or `Authorization: Bearer <secret>`)
-- **Required Roles:** n/a — secret-gated, no JWT
+- **Required Roles:** n/a (secret-gated, no JWT)
 - **Tenant Scope:** Cross-tenant (global firmware catalog)
 
 ### Request Body Schema (`publishFirmwareRelease`)
 
-Validated with `zValidator('json', publishFirmwareRelease)` — the same schema as `POST /firmware-releases` (see `src/schemas/firmware.ts`).
+Validated with `zValidator('json', publishFirmwareRelease)`, the same schema as `POST /firmware-releases` (see `src/schemas/firmware.ts`).
 
 ```json
 {
@@ -50,13 +50,13 @@ Validated with `zValidator('json', publishFirmwareRelease)` — the same schema 
   "mandatory": false,
   "release_notes": "Fix GNSS warm-start regression; bump BLE bond cache TTL.",
   "content_type": "application/octet-stream",
-  "artifact_base64": "<base64-encoded MCUboot-signed .bin, max 3,000,000 chars>"
+  "artifact_base64": "<base64-encoded artifact, max 3,000,000 chars>"
 }
 ```
 
 | Field | Type | Required | Notes |
 | :--- | :--- | :--- | :--- |
-| `target` | `'nrf5340_app'` | yes | Literal — the only accepted update target. |
+| `target` | `'nrf5340_app'` | yes | Literal (the only accepted update target). |
 | `hardware_model` | string (1–100) | yes | |
 | `hardware_revision` | string (1–100) \| null | optional | |
 | `version` | string (semver-shaped, max 50) | yes | Must match `/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/`. Stored as a string; **not** used for ordering. |
@@ -111,7 +111,7 @@ Manually (or id-specifically) triggers the asynchronous telemetry parser for a s
 - **Path:** `/internal/parse/:sessionId`
 - **Method:** `POST`
 - **Auth:** `CRON_SECRET` (via `x-cron-secret` header or `Authorization: Bearer <secret>`)
-- **Required Roles:** n/a — secret-gated, no JWT
+- **Required Roles:** n/a (secret-gated, no JWT)
 - **Tenant Scope:** Cross-tenant (the sync is selected by `session_id`, not by organisation)
 - **Path Parameters:**
   - `sessionId` (`uuid`, required): The session whose oldest `in_progress`/`failed` sync record to process.
@@ -157,14 +157,14 @@ The Vercel Cron entry point. Picks the **single oldest** `in_progress` or `faile
 - **Path:** `/internal/parse/pending`
 - **Method:** `GET`
 - **Auth:** `CRON_SECRET` (via `x-cron-secret` header or `Authorization: Bearer <secret>`)
-- **Required Roles:** n/a — secret-gated, no JWT
-- **Tenant Scope:** Cross-tenant (global queue — scans all sessions)
+- **Required Roles:** n/a (secret-gated, no JWT)
+- **Tenant Scope:** Cross-tenant (global queue, scans all sessions)
 - **Path Parameters:** none
 - **Query Parameters:** none
 
 ### Response (`200 OK`)
 
-Same response shapes as [Parse Session Telemetry](#2-parse-session-telemetry-post-internal-parse-sessionid) above — `{ ok, processed, session_id?, sync_id?, point_count?, athlete_count? }` on success, or `{ ok: true, processed: false, message }` when the queue is empty.
+Same response shapes as [Parse Session Telemetry](#2-parse-session-telemetry-post-internal-parse-sessionid) above, `{ ok, processed, session_id?, sync_id?, point_count?, athlete_count? }` on success, or `{ ok: true, processed: false, message }` when the queue is empty.
 
 ### Errors
 
@@ -173,7 +173,7 @@ Same response shapes as [Parse Session Telemetry](#2-parse-session-telemetry-pos
 | `401` | `{ error: 'Unauthorized' }` | Missing/incorrect secret, or `CRON_SECRET` unset. |
 | `500` | `{ error }` | Any failure during parse (session/sync marked `failed`; `error_message` truncated to 2000 chars on `sync_records`). |
 
-> **Race caveat:** `findSync('pending')` selects the oldest eligible sync without a `session_id` filter, and the claim is a plain `sync_records` update (`sync_status: 'in_progress'`). Two concurrent cron runs can both read the same sync before either claims it; nothing enforces a single-writer lock beyond that status update. In practice, keep cron runs serialized or tolerate duplicate work — `processTelemetry` is idempotent (see below).
+> **Race caveat:** `findSync('pending')` selects the oldest eligible sync without a `session_id` filter, and the claim is a plain `sync_records` update (`sync_status: 'in_progress'`). Two concurrent runs can both read the same sync before either claims it. Same-payload upserts overwrite their conflict keys, but the worker is not single-writer or transactionally idempotent.
 
 ---
 
@@ -182,20 +182,20 @@ Same response shapes as [Parse Session Telemetry](#2-parse-session-telemetry-pos
 Both parse routes call `processTelemetry(sessionIdParam)`. The `pending` path passes the literal string `'pending'`, which `findSync` treats specially (no `eq('session_id')` filter); any other value is used as the `session_id` filter. At a high level:
 
 1. **Find sync.** Query `sync_records` for the oldest row with `sync_status` in `['in_progress', 'failed']` (`attempted_at asc`, `limit 1`). If `sessionIdParam !== 'pending'`, also filter `eq('session_id', sessionIdParam)`. If none found (or no `session_id`), short-circuit with `{ ok: true, processed: false, message: 'No in-progress telemetry sync found' }`.
-2. **Claim sync.** Update that `sync_records` row to `sync_status: 'in_progress'`, set `attempted_at`, clear `error_message`. (This is the only mutual-exclusion mechanism — see the race caveat above.)
+2. **Claim sync.** Update that `sync_records` row to `sync_status: 'in_progress'`, set `attempted_at`, clear `error_message`. (This is the only mutual-exclusion mechanism; see the race caveat above.)
 3. **Load session + participants.** Fetch the `sessions` row (`id, organisation_id, firmware_session_id`) and the distinct `session_participants.athlete_id` set. Throw if the session is missing or has no enrolled athletes.
 4. **Download blob.** `bucket = sync.storage_bucket ?? process.env.TELEMETRY_BUCKET ?? 'session-telemetry'`; `db().storage.from(bucket).download(sync.storage_path)`. Throw if the object is missing.
-5. **Decode envelope.** `format = telemetryFormat.parse(sync.payload_format ?? 'json')`; `compression = telemetryCompression.parse(sync.compression ?? 'gzip')`; `envelope = await decodeTelemetryBlob(blob, format, compression)`. This enforces the `TELEMETRY_MAX_POINTS` limit (default `100_000`) at decode time — an oversized blob throws `'Telemetry blob exceeds the ${maxPoints} point limit'`.
+5. **Decode envelope.** `format = telemetryFormat.parse(sync.payload_format ?? 'json')`; `compression = telemetryCompression.parse(sync.compression ?? 'gzip')`; `envelope = await decodeTelemetryBlob(blob, format, compression)`. This enforces the `TELEMETRY_MAX_POINTS` limit (default `100_000`) at decode time; an oversized blob throws `'Telemetry blob exceeds the ${maxPoints} point limit'`.
 6. **Validate session + enrollment.** If `envelope.session_id` is set and differs from the sync's session, throw. Normalize points; every point's resolved `athleteId` must be in the participant set, else throw `'Athlete ${id} is not enrolled in the session'`.
 7. **Normalize + aggregate.** Build per-point telemetry rows (including a PostGIS `SRID=4326;POINT(lng lat)` `location` or `null`) and per-athlete metrics via `aggregateTelemetry` (haversine distance, sprint count at ≥ 7 m/s, max speed, mean accel magnitude, duration, `data_quality_status: 'valid'` when ≥ 2 GPS points else `'partial'`).
 8. **Upsert derived rows.**
-   - `session_telemetry_points` — chunked in batches of 500, `upsert(..., { onConflict: 'session_id,athlete_id,point_index' })`.
-   - `session_athlete_metrics` — `upsert(..., { onConflict: 'session_id,athlete_id' })` (`data_source: 'mobile_ble'`).
-   - `session_summaries` — `upsert(..., { onConflict: 'session_id' })` with totals (`total_distance_meters`, `athlete_count`, `max_speed_mps`, `total_sprint_count`, `completed_at`, `data_quality_status: 'valid'` only if every athlete is valid else `'partial'`; `average_intensity: null`).
+   - `session_telemetry_points`, chunked in batches of 500, `upsert(..., { onConflict: 'session_id,athlete_id,point_index' })`.
+   - `session_athlete_metrics`, `upsert(..., { onConflict: 'session_id,athlete_id' })` (`data_source: 'mobile_ble'`).
+   - `session_summaries`, `upsert(..., { onConflict: 'session_id' })` with totals (`total_distance_meters`, `athlete_count`, `max_speed_mps`, `total_sprint_count`, `completed_at`, `data_quality_status: 'valid'` only if every athlete is valid else `'partial'`; `average_intensity: null`).
 9. **Mark complete.** Update `sessions` (`sync_status: 'completed'`, `status: 'synced'`, `data_point_count`) and `sync_records` (`sync_status: 'completed'`, `completed_at`, `point_count`). Return `{ ok: true, processed: true, session_id, sync_id, point_count, athlete_count }`.
 10. **On any thrown error.** `updateFailure` sets `sessions.sync_status = 'failed'` and (if a `syncId` exists) `sync_records.sync_status = 'failed'` with `error_message` truncated to 2000 chars; the route returns `500 { error: <message> }`.
 
-**Idempotency:** the `sync_status` claim (step 2) plus the explicit `onConflict` keys on every upsert make re-runs safe. `processTelemetry` only ever selects `in_progress`/`failed` syncs (never `completed`), so a sync already finished is not reprocessed; the `completed` short-circuit lives in `POST /sessions/:id/complete` on the upload side. See [Ingestion Pipeline](../ingestion-pipeline).
+**Idempotency:** the `sync_status` claim (step 2) plus the explicit `onConflict` keys on every upsert make re-runs safe. `processTelemetry` only selects `in_progress`/`failed` syncs (never `completed`), so a sync already finished is not reprocessed; the `completed` short-circuit lives in `POST /sessions/:id/complete` on the upload side. See [Ingestion Pipeline](../ingestion-pipeline).
 
 ---
 
@@ -203,7 +203,7 @@ Both parse routes call `processTelemetry(sessionIdParam)`. The `pending` path pa
 
 | Variable | Used by | Purpose | Default |
 | :--- | :--- | :--- | :--- |
-| `CRON_SECRET` | middleware | Shared secret for `/internal/parse/*`. Checked against the `x-cron-secret` header or `Authorization: Bearer <secret>`. | none — if unset, the parse routes **always** return `401`. |
-| `FIRMWARE_RELEASE_SECRET` | middleware | Shared secret for `POST /internal/firmware-releases` (selected when `c.req.path.endsWith('/firmware-releases')`). | none — if unset, the publish route **always** returns `401`. |
+| `CRON_SECRET` | middleware | Shared secret for `/internal/parse/*`. Checked against the `x-cron-secret` header or `Authorization: Bearer <secret>`. | none: if unset, the parse routes **always** return `401`. |
+| `FIRMWARE_RELEASE_SECRET` | middleware | Shared secret for `POST /internal/firmware-releases` (selected when `c.req.path.endsWith('/firmware-releases')`). | none: if unset, the publish route **always** returns `401`. |
 | `TELEMETRY_BUCKET` | `processTelemetry` | Private Storage bucket for raw session telemetry blobs (download side). Falls back to `sync.storage_bucket` when present. | `'session-telemetry'` |
 | `TELEMETRY_MAX_POINTS` | `decodeTelemetryBlob` | Max points accepted in one decoded telemetry envelope; enforced at decode time, not at upload. Used only if a safe positive integer. | `100_000` |

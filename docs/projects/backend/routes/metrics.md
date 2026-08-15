@@ -6,9 +6,9 @@ outline: deep
 
 # Metrics & Targets API (Phase 1)
 
-The Metrics & Targets API exposes per-athlete performance outputs (distance, velocity, sprint counts, impacts), squad-level session rollups, and coach-configured session targets. All data is read from tables populated by the telemetry ingest pipeline — see [Ingestion Pipeline](../ingestion-pipeline) and [Sessions API](./sessions).
+The Metrics & Targets API exposes per-athlete performance outputs (distance, velocity, sprint counts, impacts), squad-level session rollups, and coach-configured session targets. All data is read from tables populated by the telemetry ingest pipeline; see [Ingestion Pipeline](../ingestion-pipeline) and [Sessions API](./sessions).
 
-> **Source file &mdash; root-mounted.** These handlers live in `src/routes/metrics.ts`, which is mounted at `/` in `app.ts`, **not** under the `/sessions` router. Their real paths are nevertheless `/sessions/:id/metrics`, `/sessions/:id/summary`, and `/sessions/:id/targets` (no collision with the `sessions` router because the sub-paths differ). The [Sessions API](./sessions) doc does **not** own these endpoints — this doc does. Mount-prefix and access semantics are covered in [Architecture](../architecture) and [Auth & Security](../auth-and-security).
+> **Source file (root-mounted).** These handlers live in `src/routes/metrics.ts`, which is mounted at `/` in `app.ts`, **not** under the `/sessions` router. Their real paths are nevertheless `/sessions/:id/metrics`, `/sessions/:id/summary`, and `/sessions/:id/targets` (no collision with the `sessions` router because the sub-paths differ). The [Sessions API](./sessions) doc does **not** own these endpoints; this doc does. Mount-prefix and access semantics are covered in [Architecture](../architecture) and [Auth & Security](../auth-and-security).
 
 ---
 
@@ -19,7 +19,7 @@ Returns performance metrics for all athletes recorded in a session, from the `se
 - **Path:** `/sessions/:id/metrics`
 - **Method:** `GET`
 - **Auth:** JWT
-- **Required Roles:** none &mdash; manual access check via `ensureSessionAccess` (super admin, session creator, org admin of the session's org, coach/sub_coach of the session's team, or an enrolled athlete pass)
+- **Required Roles:** none: manual access check via `ensureSessionAccess` (super admin, session creator, org admin of the session's org, coach/sub_coach of the session's team, or an enrolled athlete pass)
 - **Tenant Scope:** Team (session-scoped)
 - **Path Parameters:**
   - `id` (`uuid`, required): Session ID.
@@ -70,7 +70,7 @@ Fetches the single metric row for a specific athlete within a session.
 - **Path:** `/sessions/:id/metrics/:athleteId`
 - **Method:** `GET`
 - **Auth:** JWT
-- **Required Roles:** none &mdash; manual access check. `ensureSessionAccess` gates the session, then `ensureAthleteAccess` gates the athlete: `coach`, `organisation_admin`, and `ssp_super_admin` pass; an athlete must own the row (`athletes.user_id === user.id`).
+- **Required Roles:** none: manual access check. `ensureSessionAccess` gates the session, then `ensureAthleteAccess` gates the athlete: `coach`, `organisation_admin`, and `ssp_super_admin` pass; an athlete must own the row (`athletes.user_id === user.id`).
 - **Tenant Scope:** Team (session-scoped) / User (for athlete self-access)
 - **Path Parameters:**
   - `id` (`uuid`, required): Session ID.
@@ -96,7 +96,7 @@ Returns the squad-level rollup row for a session from the `session_summaries` ta
 - **Path:** `/sessions/:id/summary`
 - **Method:** `GET`
 - **Auth:** JWT
-- **Required Roles:** none &mdash; manual access check via `ensureSessionAccess` (same gate as section 1).
+- **Required Roles:** none: manual access check via `ensureSessionAccess` (same gate as section 1).
 - **Tenant Scope:** Team (session-scoped)
 - **Path Parameters:**
   - `id` (`uuid`, required): Session ID.
@@ -138,7 +138,7 @@ Returns all coach-configured target rows for a session from the `session_targets
 - **Path:** `/sessions/:id/targets`
 - **Method:** `GET`
 - **Auth:** JWT
-- **Required Roles:** `coach`, `organisation_admin`, `ssp_super_admin` (via `requireRoles` &mdash; cascade admits higher-privilege roles; `sub_coach` is **not** admitted)
+- **Required Roles:** `coach`, `organisation_admin`, `ssp_super_admin` (via `requireRoles`; cascade admits higher-privilege roles; `sub_coach` is **not** admitted)
 - **Tenant Scope:** Team (session-scoped)
 - **Path Parameters:**
   - `id` (`uuid`, required): Session ID.
@@ -253,7 +253,7 @@ Updates an existing target row for a session. Verifies the target belongs to the
 
 ### Request Body Schema (`updateTarget`)
 
-`updateTarget = createTarget.partial()` &mdash; every field is optional, including `target_scope`.
+`updateTarget = createTarget.partial()`; every field is optional, including `target_scope`.
 
 ```json
 {

@@ -6,7 +6,7 @@ outline: deep
 
 # Mobile App Design System
 
-The SSP Mobile App runs on a flat, tonal, semantic design system built from four binding sources: `PRODUCT.md`, `DESIGN.md`, `global.css`, and `src/theme.tsx`. The system is **test-enforced** — `src/components/dashboard/brand-contract.test.mjs` and `src/components/dashboard/ux-truth-source.test.mjs` fail the build if a forbidden color or font reappears, if the `ssp-mark` is altered, or if touch targets drop below 48 dp. This page documents what is actually implemented and calls out the prohibitions explicitly.
+The SSP Mobile App runs on a flat, tonal, semantic design system built from four binding sources: `PRODUCT.md`, `DESIGN.md`, `global.css`, and `src/theme.tsx`. The system is **partly test-enforced**: `src/components/dashboard/brand-contract.test.mjs` and `src/components/dashboard/ux-truth-source.test.mjs` pin specific colors, fonts, the `ssp-mark`, and named 48 dp controls. They are not a substitute for runtime accessibility review across every screen. This page documents what is implemented and calls out the prohibitions.
 
 For environment variables, build profiles, and the BLE dev-build requirement, see [Configuration & Build](./configuration).
 
@@ -22,17 +22,17 @@ The approved Steele Athletic Training Centre / SSP graphic standards are binding
 | Destructive (brand red) | `#C70000` | `199 0 0` | `--destructive` (light), readable error/destructive text and actions |
 | Mark / live emphasis (brand red) | `#FF0000` | — | `assets/brand/ssp-mark.png` and the **non-text** recording dot only |
 | Brand grey | `#B2B2B2` | — | `DESIGN.md`/`PRODUCT.md` frontmatter; structural neutral role |
-| Dark primary | `#7FA6FF` | `127 166 255` | `--primary` (dark) — accessible blue for dark surfaces |
-| Dark destructive | `#FF6B6B` | `255 107 107` | `--destructive` (dark) — readable red for dark surfaces |
+| Dark primary | `#7FA6FF` | `127 166 255` | `--primary` (dark), accessible blue for dark surfaces |
+| Dark destructive | `#FF6B6B` | `255 107 107` | `--destructive` (dark), readable red for dark surfaces |
 
 Source: `PRODUCT.md` "Brand Commitments", `DESIGN.md` frontmatter, `global.css`, `src/theme.tsx`.
 
-::: warning FORBIDDEN — green and Figtree are test-enforced
-- **Green `#22C55E` / RGB `34 197 94` is FORBIDDEN.** `brand-contract.test.mjs` asserts `assert.doesNotMatch(css, /34 197 94/)` and `assert.doesNotMatch(theme, /#22C55E/i)`. `ux-truth-source.test.mjs` asserts no legacy green across 16 dashboard components. Do not describe a "green CTA" or "success green" — success does not introduce a competing green accent.
+::: warning FORBIDDEN: green and Figtree are test-enforced
+- **Green `#22C55E` / RGB `34 197 94` is FORBIDDEN.** `brand-contract.test.mjs` asserts `assert.doesNotMatch(css, /34 197 94/)` and `assert.doesNotMatch(theme, /#22C55E/i)`. `ux-truth-source.test.mjs` asserts no legacy green across 16 dashboard components. Do not describe a "green CTA" or "success green"; success does not introduce a competing green accent.
 - **Figtree is FORBIDDEN.** `brand-contract.test.mjs` asserts `assert.doesNotMatch(packageJson, /@expo-google-fonts\/figtree/)` and `assert.doesNotMatch(layout, /Figtree/)`. The family is **Lato**. The stale `CLAUDE.md` claim of "Figtree font" is wrong.
 :::
 
-Status is never communicated by color alone — it is always **icon + text + color** (e.g. attention → `CircleAlert` + `text-destructive`; ready → `CheckCircle2` + `text-primary`). See [Dashboard & Analytics](./dashboard-and-analytics).
+Status is never communicated by color alone; it is always **icon + text + color** (e.g. attention → `CircleAlert` + `text-destructive`; ready → `CheckCircle2` + `text-primary`). See [Dashboard & Analytics](./dashboard-and-analytics).
 
 ---
 
@@ -66,7 +66,7 @@ The gluestack primitives enforce the family: `components/ui/text/styles.tsx` set
 
 ## Radii and Spacing
 
-From `DESIGN.md` frontmatter. Fully rounded shapes are reserved for progress tracks, small status dots, avatars, and icon buttons — not every container.
+From `DESIGN.md` frontmatter. Fully rounded shapes are reserved for progress tracks, small status dots, avatars, and icon buttons, not every container.
 
 | Radii | Value | Tailwind | Used by |
 | :--- | :--- | :--- | :--- |
@@ -114,7 +114,7 @@ export const SEMANTIC_COLORS = {
 `ThemeProvider` (in `src/theme.tsx`) exposes:
 
 - `mode: "light" | "dark" | "system"`, persisted to AsyncStorage under the key `"theme-mode"` (restored once on mount, written thereafter).
-- `setMode(mode)` and `toggle()` — toggle flips light↔dark, and `system` → `dark` on first press (`m === "dark" ? "light" : "dark"`).
+- `setMode(mode)` and `toggle()`: toggle flips light↔dark, and `system` → `dark` on first press (`m === "dark" ? "light" : "dark"`).
 - `useTheme()` throws if used outside `ThemeProvider`.
 
 `DashboardScreen` resolves `SEMANTIC_COLORS[resolvedScheme].background` for the canvas; charts resolve `SEMANTIC_COLORS[resolvedScheme]` for `stroke`/`fill`. See [Dashboard & Analytics](./dashboard-and-analytics).
@@ -140,20 +140,20 @@ export const SEMANTIC_COLORS = {
 | `accent` | `215 218 224` | `#D7DAE0` | `46 69 108` | `#2E456C` |
 | `accent-foreground` | `0 51 153` | `#003399` | `127 166 255` | `#7FA6FF` |
 
-`@theme inline` maps these to `--color-*` so NativeWind/Tailwind utilities (`bg-primary`, `text-foreground`, `border-border`, etc.) resolve to `rgb(var(--*))`. **There is no `34 197 94` / `#22C55E` anywhere** — `brand-contract.test.mjs` asserts this.
+`@theme inline` maps these to `--color-*` so NativeWind/Tailwind utilities (`bg-primary`, `text-foreground`, `border-border`, etc.) resolve to `rgb(var(--*))`. **There is no `34 197 94` / `#22C55E` anywhere**; `brand-contract.test.mjs` asserts this.
 
 ---
 
 ## gluestack-ui v5
 
-The component library is **gluestack-ui v5** (`@gluestack-ui/core`). Generated components live in `components/ui/*` at the **repo root** — not under `src/components/ui`. The TS path alias `@/*` maps to `[./src/*, ./*]` (see [Configuration & Build](./configuration)), so both `@/components/ui/...` and relative imports resolve.
+The component library is **gluestack-ui v5** (`@gluestack-ui/core`). Generated components live in `components/ui/*` at the **repo root**, not under `src/components/ui`. The TS path alias `@/*` maps to `[./src/*, ./*]` (see [Configuration & Build](./configuration)), so both `@/components/ui/...` and relative imports resolve.
 
 ### Provider
 
 `components/ui/gluestack-ui-provider/index.tsx` wraps `OverlayProvider` + `ToastProvider` and reconciles the native color scheme:
 
 - `mode === "system" ? "unspecified" : mode` is passed to `Appearance.setColorScheme(resolvedMode)` in a `useEffect`.
-- There is **no `if (mode !== "system")` guard** — `brand-contract.test.mjs` asserts `doesNotMatch(provider, /if \(mode !== ["']system["']\)/)`. Letting the native system theme clear app overrides is intentional: when the user returns to `system`, native surfaces revert to the OS scheme.
+- There is **no `if (mode !== "system")` guard**: `brand-contract.test.mjs` asserts `doesNotMatch(provider, /if \(mode !== ["']system["']\)/)`. Letting the native system theme clear app overrides is intentional: when the user returns to `system`, native surfaces revert to the OS scheme.
 
 ### Primitive styles (brand-enforced)
 
@@ -161,11 +161,11 @@ The component library is **gluestack-ui v5** (`@gluestack-ui/core`). Generated c
 | :--- | :--- | :--- |
 | `components/ui/text/styles.tsx` | `text-foreground font-body` | brand typography, no hex |
 | `components/ui/heading/styles.tsx` | `text-foreground font-heading tracking-sm` | brand typography, no hex |
-| `components/ui/button/index.tsx` | `min-h-12 rounded-lg ring-ring ... font-heading` | `assert.match(button, /min-h-12[^']*rounded-lg[^']*ring-ring/)` — 48 dp + brand radius + ring token |
+| `components/ui/button/index.tsx` | `min-h-12 rounded-lg ring-ring ... font-heading` | `assert.match(button, /min-h-12[^']*rounded-lg[^']*ring-ring/)`, 48 dp + brand radius + ring token |
 | `components/ui/card/styles.tsx` | `border border-border rounded-xl shadow-xs` | 12 px card radius, semantic border |
 | `components/ui/avatar/index.tsx` | status badge `bg-primary` (not `bg-green-`) | `assert.doesNotMatch(source, /bg-green-/)` |
 
-Across `text`, `heading`, `button`, and `card`, the contract asserts `doesNotMatch(... /#(?:[0-9a-f]{3}){1,2}\b/i)` — no hardcoded hex and no arbitrary palette utilities (`white`/`black`/`red`/`green`/`blue`) in these primitives.
+Across `text`, `heading`, `button`, and `card`, the contract asserts `doesNotMatch(... /#(?:[0-9a-f]{3}){1,2}\b/i)`: no hardcoded hex and no arbitrary palette utilities (`white`/`black`/`red`/`green`/`blue`) in these primitives.
 
 ---
 
@@ -175,8 +175,8 @@ Styling is NativeWind v5 over Tailwind v4. The toolchain is wired across three f
 
 | File | Role |
 | :--- | :--- |
-| `postcss.config.mjs` | `{ plugins: { '@tailwindcss/postcss': {} } }` — Tailwind v4 PostCSS plugin |
-| `metro.config.js` | `withNativewind(config, { inlineRem: 16 })` — inlines `rem` units as 16 px on native |
+| `postcss.config.mjs` | `{ plugins: { '@tailwindcss/postcss': {} } }`, Tailwind v4 PostCSS plugin |
+| `metro.config.js` | `withNativewind(config, { inlineRem: 16 })`, inlines `rem` units as 16 px on native |
 | `babel.config.js` | `babel-preset-expo` + `module-resolver` (`@/` → `./`) + `react-native-worklets/plugin`, with an override that applies `nativewind/babel` to everything **except** `react-native-web` |
 
 `global.css` imports `tailwindcss/theme.css`, `tailwindcss/preflight.css`, `tailwindcss/utilities.css`, and `nativewind/theme`, then declares the design tokens in `@layer theme` and the font roles in `@theme inline`. This is the single source of truth for CSS-driven surfaces; SVG and native APIs read `SEMANTIC_COLORS` from `src/theme.tsx` instead.
@@ -193,9 +193,9 @@ NativeWind works in Expo Go, but `react-native-ble-plx` does not. BLE tracking n
 
 `src/components/get-started/motion.tsx` provides `ReduceMotionProvider`, `useReduceMotion`, and the animation helpers used by the get-started wizard and dashboard cards:
 
-- `FadeIn` — `Motion.View` with <code v-pre>initial=&#123;&#123; opacity: 0, y: 12 &#125;&#125;</code> → <code v-pre>animate=&#123;&#123; opacity: 1, y: 0 &#125;&#125;</code>. When `reduce` is true, children render static (no `Motion.View`). Otherwise <code v-pre>transition=&#123;&#123; type: "tween", duration: 0.2, delay &#125;&#125;</code> — **no spring**.
-- `MotionCard` — entrance fade + rise and a press-response scale (0.97) split across two `Motion.View`s so the press never lags behind the entrance delay. The `Pressable` keeps `min-h-12`.
-- `ProgressBar` — `bg-primary/20` track + `bg-primary` fill; `transition: reduce ? { duration: 0 } : { duration: 0.2 }`.
+- `FadeIn`: `Motion.View` with <code v-pre>initial=&#123;&#123; opacity: 0, y: 12 &#125;&#125;</code> → <code v-pre>animate=&#123;&#123; opacity: 1, y: 0 &#125;&#125;</code>. When `reduce` is true, children render static (no `Motion.View`). Otherwise <code v-pre>transition=&#123;&#123; type: "tween", duration: 0.2, delay &#125;&#125;</code>; **no spring**.
+- `MotionCard`: entrance fade + rise and a press-response scale (0.97) split across two `Motion.View`s so the press never lags behind the entrance delay. The `Pressable` keeps `min-h-12`.
+- `ProgressBar`: `bg-primary/20` track + `bg-primary` fill; `transition: reduce ? { duration: 0 } : { duration: 0.2 }`.
 
 Local motion is brief (roughly 160–220 ms in the implementation) and limited to entrance, selection, progress, and completion. `ReduceMotionProvider` removes or replaces movement with static/immediate state changes. Do not add continuous decorative animation. The onboarding carousel reads `AccessibilityInfo.isReduceMotionEnabled` and animates only when `!reduceMotion`.
 
@@ -217,7 +217,7 @@ Minimum touch targets are **48 dp Android / 44 pt iOS**, enforced across the sha
 
 ### Recording dot — brand red, non-text only
 
-The live-recording indicator in `src/features/tracker/FirmwareTrackerScreen.tsx` uses inline style `backgroundColor: "#FF0000"`. This is the **non-text** brand red reserved for the official mark and live/recording emphasis — `tracker-ui-source.test.mjs` asserts the brand red appears as `backgroundColor: "#FF0000"` and **not** as `text-[#FF0000]` or `color:`. Never use `#FF0000` for normal-size white text; use `--destructive` (`#C70000`) for readable error/destructive text.
+The live-recording indicator in `src/features/tracker/FirmwareTrackerScreen.tsx` uses inline style `backgroundColor: "#FF0000"`. This is the **non-text** brand red reserved for the official mark and live/recording emphasis. `tracker-ui-source.test.mjs` asserts the brand red appears as `backgroundColor: "#FF0000"` and **not** as `text-[#FF0000]` or `color:`. Never use `#FF0000` for normal-size white text; use `--destructive` (`#C70000`) for readable error/destructive text.
 
 ---
 
@@ -236,7 +236,7 @@ The live-recording indicator in `src/features/tracker/FirmwareTrackerScreen.tsx`
 
 ### Navigation and screen chrome
 
-- Keep exactly **four `NativeTabs` destinations per role**: Coach — Home, Analytics, Squad, Profile; Player — Home, Analytics, Trainer, Profile. `ScreenHeader` supplies title/context plus optional 48 dp back or trailing actions. Do not create a second navigation system. See [Architecture & Navigation](./architecture).
+- Keep exactly **four `NativeTabs` destinations per role**: Coach: Home, Analytics, Squad, Profile; Player: Home, Analytics, Trainer, Profile. `ScreenHeader` supplies title/context plus optional 48 dp back or trailing actions. Do not create a second navigation system. See [Architecture & Navigation](./architecture).
 
 ### Cards and summaries
 
@@ -266,7 +266,7 @@ The system is primarily flat and tonal. Cards use a one-pixel semantic border, c
 
 - **Don't** replace gluestack-ui v5, NativeWind, Expo Router, or the native tab architecture.
 - **Don't** add a parallel design system, chart library, social feature, unsupported backend/device behavior, or enabled placeholder control.
-- **Don't** bring back Figtree, legacy green, arbitrary palette utilities, decorative score rings, generated screenshot values, gradients, glow, or glass.
+- **Don't** bring back Figtree, legacy green, arbitrary palette utilities, decorative score rings, generated screenshot values, decorative surface gradients, glow, or glass. Data-visualization gradients already used by the area chart and heatmap remain intentional.
 - **Don't** treat web export, source tests, approved comps, simulator checks, or mocked device states as real SSP-S1 hardware proof.
 
 ---
@@ -284,7 +284,7 @@ Two node `--test` files are the enforcement mechanism (see [Testing](./testing))
 
 ## Cross-references
 
-- [Configuration & Build](./configuration) — env vars, build profiles, the BLE dev-build requirement, and the full toolchain config.
-- [Architecture & Navigation](./architecture) — provider hierarchy, route tree, role-gated tabs.
-- [Dashboard & Analytics](./dashboard-and-analytics) — how `SEMANTIC_COLORS` and the chart/heatmap rules are applied.
-- [Testing](./testing) — the dual runner and every `.test.mjs` / `.test.ts` file.
+- [Configuration & Build](./configuration): env vars, build profiles, the BLE dev-build requirement, and the full toolchain config.
+- [Architecture & Navigation](./architecture): provider hierarchy, route tree, role-gated tabs.
+- [Dashboard & Analytics](./dashboard-and-analytics): how `SEMANTIC_COLORS` and the chart/heatmap rules are applied.
+- [Testing](./testing): the dual runner and every `.test.mjs` / `.test.ts` file.

@@ -12,12 +12,16 @@ The Goals API lets coaches and admins define specific, measurable performance go
 
 ## 1. List Goals (`GET /goals`)
 
+::: danger Scope gaps
+For non-super-admin callers, the organisation filter is added only when `primaryOrganisationId` exists. A coach/admin with no primary organisation can therefore receive an unscoped goal query. `team_id` and `athlete_id` are query filters only; the handler imports but does not call `hasTeamAccess` or `hasOrgAccess`. Pure-athlete callers are filtered to their own athlete id after the query.
+:::
+
 Lists goals, optionally filtered by team or athlete. Non-super-admins are scoped to their primary organisation; pure athletes (those holding only the `athlete` role) are further narrowed to their own athlete record.
 
 - **Path:** `/goals`
 - **Method:** `GET`
 - **Auth:** JWT
-- **Required Roles:** none — manual access check. Super admins see all goals; everyone else is scoped to `ctx.primaryOrganisationId`; pure athletes see only their own.
+- **Required Roles:** none (manual access check). Super admins see all goals; everyone else is scoped to `ctx.primaryOrganisationId`; pure athletes see only their own.
 - **Tenant Scope:** Org / Self
 - **Query Parameters:**
   - `team_id` (`uuid`, optional): Filter goals for a team.

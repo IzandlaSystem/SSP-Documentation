@@ -50,7 +50,7 @@ Fetches metadata for a single organisation. Access is checked manually (no `requ
 - **Path:** `/organisations/:id`
 - **Method:** `GET`
 - **Auth:** JWT
-- **Required Roles:** none — manual access check (`ssp_super_admin` or `ctx.primaryOrganisationId === id`)
+- **Required Roles:** none (manual access check: `ssp_super_admin` or `ctx.primaryOrganisationId === id`)
 - **Tenant Scope:** Org
 - **Source:** `src/routes/organisations.ts` (mounted at `/organisations` in `app.ts`)
 

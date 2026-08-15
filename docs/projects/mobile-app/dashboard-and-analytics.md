@@ -1,15 +1,15 @@
 ---
 title: Dashboard & Analytics (Mobile)
-description: Dashboard, analytics charts, session history, and the GPS heatmap in the SSP mobile app — and which surfaces are mock-fed versus real API data.
+description: Dashboard, analytics charts, session history, and the GPS heatmap in the SSP mobile app, and which surfaces are mock-fed versus real API data.
 outline: deep
 ---
 
 # Dashboard & Analytics
 
-The dashboard and analytics surfaces live in [`src/components/dashboard/`](https://github.com/IzandlaSystems/SSP-Mobile-App/blob/main/src/components/dashboard) and are composed by the Coach Home, Player "Home" (Dashboard), Analytics, and Session Detail routes. This page documents the screen shells, the component catalog, the hand-rolled SVG charts, the football-pitch heatmap, and the session history/detail flow.
+The dashboard and analytics surfaces live in [`src/components/dashboard/`](https://github.com/IzandlaSystem/SSP-Mobile-App/blob/main/src/components/dashboard) and are composed by the Coach Home, Player "Home" (Dashboard), Analytics, and Session Detail routes. This page documents the screen shells, the component catalog, the hand-rolled SVG charts, the football-pitch heatmap, and the session history/detail flow.
 
-::: warning Mock-first — read this first
-**Most dashboard data is mocked and empty.** Every `MOCK_*` array in `src/components/dashboard/mock-data.ts` is `[]` (or an empty-object placeholder for the singletons), so screens render **empty states by default**. Charts are fed from these empty `MOCK_*` ranges, **not** from the API.
+::: warning Mock-first: read this first
+**Most dashboard data is mocked and empty.** Every `MOCK_*` collection in `src/components/dashboard/mock-data.ts` is `[]`; singleton placeholders carry explicit zero/"No …" values. Screens therefore render empty or zero states by default. Charts are fed from these empty `MOCK_*` ranges, **not** from the API.
 
 The only real data on these screens flows through three hooks:
 
@@ -41,11 +41,11 @@ See also: [Architecture](./architecture) for the route tree and role guards, [De
 | `edges` default | `["top", "bottom"]` (push/detail); tab screens pass `["top"]` |
 | Motion | `ReduceMotionProvider` honors `AccessibilityInfo.isReduceMotionEnabled()` |
 
-The 112 px tab clearance is test-enforced (`ux-truth-source.test.mjs`) so scroll content clears the native tab bar. The optional `header` renders **inside** the `ScrollView` (large-title scrolling behavior) and inside the `ReduceMotionProvider`, so a `FadeIn` header is gated by the OS reduce-motion setting. The shell intentionally does **not** wrap children in `FadeIn` — screens compose their own per-card staggered entrances.
+The 112 px tab clearance is test-enforced (`ux-truth-source.test.mjs`) so scroll content clears the native tab bar. The optional `header` renders **inside** the `ScrollView` (large-title scrolling behavior) and inside the `ReduceMotionProvider`, so a `FadeIn` header is gated by the OS reduce-motion setting. The shell does **not** wrap children in `FadeIn`; screens compose their own per-card staggered entrances.
 
 ### `ScreenHeader.tsx`
 
-`src/components/dashboard/ScreenHeader.tsx` — title + optional muted subtitle, optional SSP brand mark, optional back affordance, and an optional right-side icon button.
+`src/components/dashboard/ScreenHeader.tsx`: title + optional muted subtitle, optional SSP brand mark, optional back affordance, and an optional right-side icon button.
 
 | Slot | Control | Touch target |
 | :--- | :--- | :--- |
@@ -109,8 +109,8 @@ The barrel `src/components/dashboard/index.ts` re-exports the full catalog. The 
 | Component | File | What it does |
 | :--- | :--- | :--- |
 | `PerformanceSummaryCard` | `PerformanceSummaryCard.tsx` | `accessibilityRole="summary"` with `accessibilityLabel={buildPerformanceSummaryAccessibilityLabel(props)}`, `bg-primary`, **no** `PowerScoreRing` (decorative ring forbidden). Stacks at large font: `usesLargeTextLayout(fontScale)` → `isLargeText ? "3xl" : "5xl"`, `MetricsStack = isLargeText ? VStack : HStack`, `summaryFontMultiplier` via `DASHBOARD_MAX_FONT_SIZE_MULTIPLIER` (≥7 `maxFontSizeMultiplier`), no `numberOfLines`. |
-| `PowerScoreRing` | `PowerScoreRing.tsx` | SVG ring (`stroke={colors.border}` / `stroke={colors.primary}`), optional trend `Badge` (TrendingUpDown icon, "{delta} vs last week"). **Not** used by `PerformanceSummaryCard` — kept for compact contexts. `accessibilityRole="image"`. |
-| `DeviceReadinessCard` | `DeviceReadinessCard.tsx` | **Presentational only** — no `expo-router`/`useDeviceDemo` import. Props `readiness: DeviceReadiness`, `onPress: () => void`. Rows: Connection / Battery / "Uploads pending" / status. `HStack` aligns values at the trailing edge. Status icons via `STATUS_PRESENTATION[readiness.state]`: attention `CircleAlert` `text-destructive`, disconnected `WifiOff`, ready `CheckCircle2` `text-primary`, empty `PackagePlus`, syncing `RefreshCw`. Footer button "Open Device Hub" (`min-h-12`). |
+| `PowerScoreRing` | `PowerScoreRing.tsx` | SVG ring (`stroke={colors.border}` / `stroke={colors.primary}`), optional trend `Badge` (TrendingUpDown icon, "{delta} vs last week"). **Not** used by `PerformanceSummaryCard`; kept for compact contexts. `accessibilityRole="image"`. |
+| `DeviceReadinessCard` | `DeviceReadinessCard.tsx` | **Presentational only**: no `expo-router`/`useDeviceDemo` import. Props `readiness: DeviceReadiness`, `onPress: () => void`. Rows: Connection / Battery / "Uploads pending" / status. `HStack` aligns values at the trailing edge. Status icons via `STATUS_PRESENTATION[readiness.state]`: attention `CircleAlert` `text-destructive`, disconnected `WifiOff`, ready `CheckCircle2` `text-primary`, empty `PackagePlus`, syncing `RefreshCw`. Footer button "Open Device Hub" (`min-h-12`). |
 | `StatCard` | `StatCard.tsx` | Single statistic tile. |
 | `TargetProgressCard` | `TargetProgressCard.tsx` | Weekly-goal progress card (player Trainer tab). |
 
@@ -122,7 +122,7 @@ The barrel `src/components/dashboard/index.ts` re-exports the full catalog. The 
 | `MetricStrip` | `MetricStrip.tsx` | Wrapping row of metric cells (`min-w-32`); each cell accessible. |
 | `InfoRow` | `InfoRow.tsx` | Label + value row (SettingsGroup member). |
 | `RowLeading` | `RowLeading.tsx` | Leading icon chip + label used by `SettingsRow`. |
-| `PlayerRow` | `PlayerRow.tsx` | Squad row, `role="listitem"`, status active → "Available" else "Resting". **No `onPress`** on the squad screen (test-enforced — no fake detail actions). |
+| `PlayerRow` | `PlayerRow.tsx` | Squad row, `role="listitem"`, status active → "Available" else "Resting". **No `onPress`** on the squad screen (test-enforced; no fake detail actions). |
 | `LeaderboardRow` | `LeaderboardRow.tsx` | Top-performer row. |
 | `EmptyState` | `EmptyState.tsx` | Empty-state block (icon + title + subtitle). |
 
@@ -135,15 +135,15 @@ The barrel `src/components/dashboard/index.ts` re-exports the full catalog. The 
 | `SettingsGroup` | `SettingsGroup.tsx` | Grouping container for `InfoRow`/`SettingsRow`. |
 | `SettingsRow` | `SettingsRow.tsx` | `min-h-12` Pressable + optional trailing `Switch` (`min-h-12 min-w-12`); `trailing: "chevron" \| "switch" \| "none"`, `tone: "default" \| "destructive"`. |
 | `LogoutSettingsRow` | `LogoutSettingsRow.tsx` | AlertDialog "Sign out of SSP?", `variant="destructive"`, `signOut: () => supabase.auth.signOut({ scope: "local" })`, `navigateToAuth: () => router.replace("/auth")`. See [Auth & Onboarding](./auth-and-onboarding). |
-| `DevRoleSwitcher` | `DevRoleSwitcher.tsx` | **Returns `null`** — disabled to enforce role separation (test-enforced). |
+| `DevRoleSwitcher` | `DevRoleSwitcher.tsx` | **Returns `null`**: disabled to enforce role separation (test-enforced). |
 
 ### Feedback & history
 
 | Component | File | What it does |
 | :--- | :--- | :--- |
 | `CoachFeedbackFeed` | `CoachFeedbackFeed.tsx` | `accessibilityRole="list"`; empty → `EmptyState` "No coach feedback yet". Formats dates via `formatFeedbackDate`. |
-| `SessionHistorySection` | `SessionHistorySection.tsx` | Expandable "Recorded sessions" — see [§5](#_5-session-history-detail). |
-| `FootballPitchHeatmap` | `FootballPitchHeatmap.tsx` | GPS density heatmap — see [§6](#_6-football-pitch-heatmap). |
+| `SessionHistorySection` | `SessionHistorySection.tsx` | Expandable "Recorded sessions". See [§5](#_5-session-history-detail). |
+| `FootballPitchHeatmap` | `FootballPitchHeatmap.tsx` | GPS density heatmap. See [§6](#_6-football-pitch-heatmap). |
 
 Source: `src/components/dashboard/index.ts`.
 
@@ -151,7 +151,7 @@ Source: `src/components/dashboard/index.ts`.
 
 ## 4. Charts
 
-All charts are hand-rolled SVG (`react-native-svg`) — no charting library. They are fed from the empty `MOCK_*` ranges, so on a real device they currently render their empty state ("No chart data" for `TimeSeriesChart`).
+All charts are hand-rolled SVG (`react-native-svg`); no charting library. They are fed from the empty `MOCK_*` ranges, so on a real device they render their empty state ("No chart data" for `TimeSeriesChart`).
 
 ### `TimeSeriesChart.tsx`
 
@@ -179,7 +179,7 @@ All geometry is kept finite for empty/one-point/flat/negative/normal inputs (tes
 
 ### `BarChartMock.tsx`
 
-`src/components/dashboard/charts/BarChartMock.tsx` — a **flexbox** horizontal bar chart (no SVG). Bars are `bg-primary` widths proportional to `value/max`.
+`src/components/dashboard/charts/BarChartMock.tsx` is a **flexbox** horizontal bar chart (no SVG). Bars are `bg-primary` widths proportional to `value/max`.
 
 | Prop | Default | Notes |
 | :--- | :--- | :--- |
@@ -195,31 +195,31 @@ Source: `src/components/dashboard/charts/TimeSeriesChart.tsx`, `time-series-geom
 
 ## 5. Session history & detail
 
-The session history list and the session detail screen are the **only** dashboard surfaces carrying real API data.
+The session history list and session detail screen are the only dashboard surfaces carrying real **session-performance** data. Home/Profile identity also uses `useApiMe`; the other metrics, goals, plans, squad, feedback, and chart series remain mock/empty.
 
 ### `SessionHistorySection.tsx`
 
-`src/components/dashboard/SessionHistorySection.tsx` — an expandable card labelled "Recorded sessions".
+`src/components/dashboard/SessionHistorySection.tsx` is an expandable card labelled "Recorded sessions".
 
 | Behavior | Detail |
 | :--- | :--- |
 | Header | `accessibilityRole="button"`, <code v-pre>accessibilityState=&#123;&#123; expanded &#125;&#125;</code>, `accessibilityLabel="Recorded sessions"` |
 | Sort | `sortSessionsNewestFirst(sessions)` |
-| Chevrons | Rotates a **wrapper** (`transform: rotate: expanded ? "180deg" : "0deg"`), not the icon — avoids an Android SVG `rotate-180` bug (test-enforced) |
+| Chevrons | Rotates a **wrapper** (`transform: rotate: expanded ? "180deg" : "0deg"`), not the icon; avoids an Android SVG `rotate-180` bug (test-enforced) |
 | States | Empty → "No recorded sessions yet"; loading → "Loading sessions"; error → header subtitle "Unable to load sessions" (muted) and body renders the `{error}` string in `text-destructive` |
 | Row | `accessibilityRole="button"`, label "{name}. {date} at {time}. {duration} minutes. {venue}. {intensity} intensity." (the visible row text abbreviates duration to "min") |
 
 ### `SessionDetailScreen.tsx`
 
-`src/components/dashboard/SessionDetailScreen.tsx` — `useApiSession(sessionId)` + `useApiSessions()` for adjacent navigation.
+`src/components/dashboard/SessionDetailScreen.tsx`: `useApiSession(sessionId)` + `useApiSessions()` for adjacent navigation.
 
 | Behavior | Detail |
 | :--- | :--- |
 | Loading / missing | "Loading session" / "This session could not be found or is not available to your account." |
 | Navigation | Previous/Next `Button`s bounded via `isDisabled={!previousId}` / `isDisabled={!nextId}`; `onNavigate(sessionId)` replaces the route |
-| Metrics | `getSessionMetrics(session, role)` — coach → `teamMetrics`, player → `playerMetrics` — rendered in a `MetricStrip` |
+| Metrics | `getSessionMetrics(session, role)` (coach → `teamMetrics`, player → `playerMetrics`), rendered in a `MetricStrip` |
 | Heatmap | `FootballPitchHeatmap session={session}` |
-| Truthfulness | No `MOCK_TRAINING_SESSIONS` / `getSessionById` — preserves the real API UUID (test-enforced) |
+| Truthfulness | No `MOCK_TRAINING_SESSIONS` / `getSessionById`; preserves the real API UUID (test-enforced) |
 | Detail | `SettingsGroup` with Date/Start/End/Duration/Type/Venue/Coach (+ Attendance for coach) |
 
 ### Routes — `src/app/(role)/session/[id].tsx`
@@ -235,7 +235,7 @@ Both import via relative paths (`../../../components/dashboard`) and `router.rep
 
 ### `session-history.ts`
 
-`src/components/dashboard/session-history.ts` — shared helpers and the `MockTrainingSession` shape used by both the adapter output and the fixture data.
+`src/components/dashboard/session-history.ts`: shared helpers and the `MockTrainingSession` shape used by both the adapter output and the fixture data.
 
 | Export | Purpose |
 | :--- | :--- |
@@ -243,13 +243,13 @@ Both import via relative paths (`../../../components/dashboard`) and `router.rep
 | `sortSessionsChronologically` / `sortSessionsNewestFirst` | Order by `Date.parse(startsAt)` |
 | `getAdjacentSessionIds(sessions, id)` | `{ previousId, nextId }` from chronological order |
 | `getSessionMetrics(session, role)` | coach → `teamMetrics`, player → `playerMetrics` |
-| `getSessionById` | Lookup helper (exported; **not** used by `SessionDetailScreen` — test-enforced) |
+| `getSessionById` | Lookup helper (exported; **not** used by `SessionDetailScreen`; test-enforced) |
 | `getSessionDurationMinutes` | `max(0, (endsAt - startsAt) / 60_000)` |
 | `formatSessionDate` / `formatSessionTime` | `Intl.DateTimeFormat("en-ZA", …)` |
 
 ### `coach-feedback.ts`
 
-`src/components/dashboard/coach-feedback.ts` — deterministic, locale-stable date formatting (no `Intl` timezone drift).
+`src/components/dashboard/coach-feedback.ts`: deterministic, locale-stable date formatting (no `Intl` timezone drift).
 
 | Export | Purpose |
 | :--- | :--- |
@@ -258,11 +258,11 @@ Both import via relative paths (`../../../components/dashboard`) and `router.rep
 
 ### `dashboard-helpers.ts`
 
-`src/components/dashboard/dashboard-helpers.ts` — small shared helpers.
+`src/components/dashboard/dashboard-helpers.ts`: small shared helpers.
 
 | Export | Purpose |
 | :--- | :--- |
-| `DASHBOARD_MAX_FONT_SIZE_MULTIPLIER` | `1.5` — applied across dashboard screens |
+| `DASHBOARD_MAX_FONT_SIZE_MULTIPLIER` | `1.5`; applied across dashboard screens |
 | `finiteOrZero(value)` | `Number.isFinite(value) ? value : 0` |
 | `usesLargeTextLayout(fontScale)` | `Number.isFinite(fontScale) && fontScale >= 1.5` |
 | `getProgressPercentage(value, target)` | Clamps to 0–100; 0 for non-finite or `target <= 0` |
@@ -290,11 +290,11 @@ Both import via relative paths (`../../../components/dashboard`) and `router.rep
 
 ### Color rule (test-enforced)
 
-Density uses **only** `colors.primary` → `colors.destructive`. Green, yellow, and orange are explicitly forbidden — `session-history-source.test.mjs` asserts the heatmap source does not match `#34D399|#FACC15|#F59E0B|#EF4444|green|yellow|orange`, and `ux-truth-source.test.mjs` asserts no legacy green across the 16 dashboard grammar files. See [Design System](./design-system).
+Density uses **only** `colors.primary` → `colors.destructive`. Green, yellow, and orange are forbidden; `session-history-source.test.mjs` asserts the heatmap source does not match `#34D399|#FACC15|#F59E0B|#EF4444|green|yellow|orange`, and `ux-truth-source.test.mjs` asserts no legacy green across the 16 dashboard grammar files. See [Design System](./design-system).
 
 ### `heatmap-density.ts`
 
-`src/components/dashboard/heatmap-density.ts` — pure density math.
+`src/components/dashboard/heatmap-density.ts`: pure density math.
 
 | Export | Purpose |
 | :--- | :--- |
@@ -328,7 +328,7 @@ flowchart TD
 
 - `TimeRange` tabs (day/week/month) with <code v-pre>accessibilityState=&#123;&#123; selected: range === r.value &#125;&#125;</code>, `TabsTrigger className="h-12 flex-1"`, and `rangeLabel={analytics.meta}` on all three charts.
 - Three `TimeSeriesChart`s (trainingLoad area / intensity line / distance line) + one `BarChartMock` (workload zones, `sort="none"`).
-- `SessionHistorySection` wired to `useApiSessions()` — loading/error passed through; `onSelect` pushes `/(coach)/session/[id]`.
+- `SessionHistorySection` wired to `useApiSessions()`: loading/error passed through; `onSelect` pushes `/(coach)/session/[id]`.
 - "Top performers" renders `MOCK_LEADERBOARD` (empty) via `LeaderboardRow`.
 
 ### Player — `src/app/(player)/(tabs)/analytics.tsx`

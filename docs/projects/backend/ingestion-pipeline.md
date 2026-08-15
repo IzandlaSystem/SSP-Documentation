@@ -1,16 +1,16 @@
 ---
 title: Telemetry Ingestion Pipeline
-description: End-to-end Phase 3 telemetry pipeline — direct-to-storage ingestion, idempotent async parse worker, and metric aggregation in SSP-API.
+description: "End-to-end Phase 3 telemetry pipeline: direct-to-storage ingestion, retry-safe upserts, parser concurrency limits, and metric aggregation in SSP-API."
 outline: deep
 ---
 
 # Telemetry Ingestion Pipeline
 
-The Phase 3 telemetry pipeline moves hundreds of thousands of GPS and IMU
-samples per session off the mobile app, through Supabase Storage, and into
+The Phase 3 telemetry pipeline moves a configured maximum of GPS and IMU
+samples per upload (100,000 by default) off the mobile app, through Supabase Storage, and into
 Postgres without streaming raw points through a stateless Vercel Function. The
 gateway (`src/routes/ingest.ts`) only mints a presigned upload URL and records a
-pending `sync_records` row; the device PUTs the blob straight to Storage; a
+pending `sync_records` row; the mobile app PUTs the blob straight to Storage; a
 second, secret-gated worker (`src/routes/internal.ts` + `src/lib/telemetry.ts`)
 downloads, decodes, normalizes, aggregates, and upserts the derived rows.
 
@@ -72,18 +72,18 @@ sequenceDiagram
 All four routes are root-mounted from `src/routes/ingest.ts`, so their real paths
 begin with `/sessions/:id/...`. Each handler calls `loadSessionAccess(user,
 sessionId)` first and returns the access result's `error`/`status` (403 / 404)
-on failure. No `requireRoles` gate — access is granted by session membership.
+on failure. No `requireRoles` gate; access is granted by session membership.
 
 ### 1. Mint presigned upload URL (`POST /sessions/:id/ingest-url`)
 
-- **Path** — `POST /sessions/:id/ingest-url` (param `id`)
-- **Auth** — JWT, then `loadSessionAccess`
-- **Required roles** — none — manual `loadSessionAccess` (any session member)
-- **Tenant scope** — Session (org/team derived from the session)
-- **Request body** — `createIngestUpload`, parsed via `safeParse` (body allowed
+- **Path**: `POST /sessions/:id/ingest-url` (param `id`)
+- **Auth**: JWT, then `loadSessionAccess`
+- **Required roles**: none (manual `loadSessionAccess`, any session member)
+- **Tenant scope**: Session (org/team derived from the session)
+- **Request body**: `createIngestUpload`, parsed via `safeParse` (body allowed
   to be empty `{}`). `format` defaults to `'json'`; `compression` defaults to
   `'gzip'`.
-- **Behavior** — builds the storage object path, calls
+- **Behavior**: builds the storage object path, calls
   `db().storage.from(bucket).createSignedUploadUrl(path)`, and inserts a
   `sync_records` row with `source_type: 'mobile_app'`, `entity_type: 'session'`,
   `entity_id: sessionId`, `sync_status: 'pending'`, plus `storage_bucket`,
@@ -104,7 +104,7 @@ on failure. No `requireRoles` gate — access is granted by session membership.
     "compression": "gzip"
   }
   ```
-- **Errors** — 400 `{ error: 'Invalid body', issues: [{path, message}] }`;
+- **Errors**: 400 `{ error: 'Invalid body', issues: [{path, message}] }`;
   403 / 404 from `loadSessionAccess`; 500 on Storage or insert error.
 
 `SIGNED_UPLOAD_TTL_SECONDS = 2 * 60 * 60` (7200s).
@@ -113,12 +113,12 @@ on failure. No `requireRoles` gate — access is granted by session membership.
 
 ### 2. Acknowledge upload completion (`POST /sessions/:id/complete`)
 
-- **Path** — `POST /sessions/:id/complete` (param `id`)
-- **Auth** — JWT, then `loadSessionAccess`
-- **Required roles** — none — manual `loadSessionAccess`
-- **Request body** — `completeIngest` via `safeParse` (empty `{}` ok):
+- **Path**: `POST /sessions/:id/complete` (param `id`)
+- **Auth**: JWT, then `loadSessionAccess`
+- **Required roles**: none (manual `loadSessionAccess`)
+- **Request body**: `completeIngest` via `safeParse` (empty `{}` ok):
   `sync_id?` (uuid), `size_bytes?` (int ≥ 0), `point_count?` (int ≥ 0).
-- **Behavior** — finds the sync record by `sync_id` if provided, otherwise the
+- **Behavior**: finds the sync record by `sync_id` if provided, otherwise the
   latest `sync_status = 'pending'` row for the session. 404
   `'Pending sync record not found'` if none. 409 `'Sync record has no Storage
   object'` if the row lacks `storage_bucket` or `storage_path`. If
@@ -145,17 +145,17 @@ on failure. No `requireRoles` gate — access is granted by session membership.
     }
   }
   ```
-- **Errors** — 400 invalid body; 403 / 404 (access / not found); 409 missing
+- **Errors**: 400 invalid body; 403 / 404 (access / not found); 409 missing
   Storage object; 500 on DB error.
 
 ---
 
 ### 3. List sync records (`GET /sessions/:id/sync`)
 
-- **Path** — `GET /sessions/:id/sync` (param `id`)
-- **Auth** — JWT, then `loadSessionAccess`
-- **Required roles** — none — manual `loadSessionAccess`
-- **Behavior** — lists `sync_records` for the session, ordered
+- **Path**: `GET /sessions/:id/sync` (param `id`)
+- **Auth**: JWT, then `loadSessionAccess`
+- **Required roles**: none (manual `loadSessionAccess`)
+- **Behavior**: lists `sync_records` for the session, ordered
   `created_at desc`, selecting `id, session_id, sync_status, attempted_at,
   completed_at, error_message, payload_size_bytes, point_count, payload_format,
   compression, created_at, updated_at`.
@@ -170,19 +170,19 @@ on failure. No `requireRoles` gate — access is granted by session membership.
   }
   ```
   `sync_status` falls back to `'pending'` when there are no records.
-- **Errors** — 403 / 404 / 500.
+- **Errors**: 403 / 404 / 500.
 
 ---
 
 ### 4. Read session telemetry (`GET /sessions/:id/telemetry`)
 
-- **Path** — `GET /sessions/:id/telemetry` (param `id`)
-- **Auth** — JWT, then `loadSessionAccess`
-- **Required roles** — none — manual `loadSessionAccess`
-- **Query parameters** — parsed via `telemetryListQuery.safeParse`:
+- **Path**: `GET /sessions/:id/telemetry` (param `id`)
+- **Auth**: JWT, then `loadSessionAccess`
+- **Required roles**: none (manual `loadSessionAccess`)
+- **Query parameters**: parsed via `telemetryListQuery.safeParse`:
   `athlete_id?` (uuid), `after_index` (coerced int ≥ -1, default `-1`),
   `limit` (coerced int 1–5000, default `1000`).
-- **Behavior** — queries `session_telemetry_points`
+- **Behavior**: queries `session_telemetry_points`
   `gte('point_index', after_index + 1)`, `order('point_index', { ascending:
   true })`, `.limit(limit)`, optional `eq('athlete_id', …)`. Selects
   `athlete_id, point_index, timestamp, latitude, longitude, speed_mps,
@@ -211,7 +211,7 @@ on failure. No `requireRoles` gate — access is granted by session membership.
   ```
   `next_after_index` is the last point's `point_index` or `null`;
   `has_more = points.length === limit`.
-- **Errors** — 400 `{ error: 'Invalid query', issues }`; 403 / 404 / 500.
+- **Errors**: 400 `{ error: 'Invalid query', issues }`; 403 / 404 / 500.
 
 ---
 
@@ -227,13 +227,13 @@ If the secret env var is unset, the route always 401s.
 | Method | Full path | Auth | Behavior |
 | :--- | :--- | :--- | :--- |
 | `POST` | `/internal/parse/:sessionId` | `CRON_SECRET` | Manual / id-specific parse. Calls `processTelemetry(sessionId)`. |
-| `GET` | `/internal/parse/pending` | `CRON_SECRET` | Vercel Cron entry. Calls `processTelemetry('pending')` — claims the **single oldest** `in_progress` / `failed` sync across **all** sessions (no `session_id` filter). |
+| `GET` | `/internal/parse/pending` | `CRON_SECRET` | Vercel Cron entry. Calls `processTelemetry('pending')`, which claims the **single oldest** `in_progress` / `failed` sync across **all** sessions (no `session_id` filter). |
 
 Both handlers return the `processTelemetry` result body verbatim:
 
-- Nothing to do — `200 { ok: true, processed: false, message: 'No in-progress telemetry sync found' }`.
-- Success — `200 { ok: true, processed: true, session_id, sync_id, point_count, athlete_count }`.
-- Failure — `500 { error: <message> }`.
+- Nothing to do: `200 { ok: true, processed: false, message: 'No in-progress telemetry sync found' }`.
+- Success: `200 { ok: true, processed: true, session_id, sync_id, point_count, athlete_count }`.
+- Failure: `500 { error: <message> }`.
 
 > **Note (cross-session claim).** `/internal/parse/pending` does not filter by
 > session. Concurrent cron runs could race on the same sync record; the only
@@ -249,7 +249,7 @@ Both handlers return the `processTelemetry` result body verbatim:
 the oldest eligible sync across all sessions; otherwise it scopes to that
 session. Steps, mapped from `src/lib/telemetry.ts` + `src/routes/internal.ts`:
 
-1. **`findSync(sessionIdParam)`** — `sync_records.select('*')`
+1. **`findSync(sessionIdParam)`**: `sync_records.select('*')`
    `.in('sync_status', ['in_progress', 'failed'])`
    `.order('attempted_at', { ascending: true })`; if `sessionIdParam !==
    'pending'`, also `.eq('session_id', sessionIdParam)`; `.limit(1).maybeSingle()`.
@@ -257,7 +257,7 @@ session. Steps, mapped from `src/lib/telemetry.ts` + `src/routes/internal.ts`:
    message: 'No in-progress telemetry sync found' }`.
 3. Capture `syncId = sync.id`, `actualSessionId = sync.session_id`. If
    `!sync.storage_path` → throw `'Sync record has no Storage path'`.
-4. **Claim** — `update sync_records set sync_status: 'in_progress',
+4. **Claim**: `update sync_records set sync_status: 'in_progress',
    attempted_at: now, error_message: null where id = sync.id`.
 5. Load `sessions` (`id, organisation_id, firmware_session_id`); throw
    `'Session not found'` if missing.
@@ -276,7 +276,7 @@ session. Steps, mapped from `src/lib/telemetry.ts` + `src/routes/internal.ts`:
 11. Validate every point's `athleteId` is in the participant set; throw
     `'Athlete <id> is not enrolled in the session'` otherwise.
 12. Compute per-athlete `dataQualityStatus` via `aggregateTelemetry(points)`.
-13. Build `telemetryRows` — one per point — with `session_id, athlete_id,
+13. Build `telemetryRows` (one per point) with `session_id, athlete_id,
     organisation_id, firmware_session_id` (from `envelope.firmware_session_id
     ?? session.firmware_session_id`), `point_index` (sequential `0..n`),
     `timestamp, latitude, longitude, location`
@@ -288,7 +288,7 @@ session. Steps, mapped from `src/lib/telemetry.ts` + `src/routes/internal.ts`:
 15. `metrics = aggregateTelemetry(points)`; build `metricRows`
     (`data_source: 'mobile_ble'`, `recorded_at`, etc.); upsert into
     `session_athlete_metrics` with `onConflict: 'session_id,athlete_id'`.
-16. Upsert `session_summaries` with `onConflict: 'session_id'` — totals:
+16. Upsert `session_summaries` with `onConflict: 'session_id'`. Totals:
     `total_distance_meters` (sum), `athlete_count`, `average_intensity: null`,
     `max_speed_mps` (max non-null), `total_sprint_count` (sum), `completed_at`,
     `data_quality_status` (`'valid'` if every athlete is valid else
@@ -299,16 +299,18 @@ session. Steps, mapped from `src/lib/telemetry.ts` + `src/routes/internal.ts`:
     `error_message: null`, `point_count: points.length`.
 19. Return `200 { ok: true, processed: true, session_id, sync_id, point_count,
     athlete_count }`.
-20. **On any thrown error** — `updateFailure(actualSessionId, syncId, error)`
+20. **On any thrown error**: `updateFailure(actualSessionId, syncId, error)`
     sets `sessions.sync_status = 'failed'` and (if `syncId`) `sync_records` →
     `sync_status: 'failed'`, `error_message` (truncated to 2000 chars);
     returns `500 { error: <message> }`.
 
-### Idempotency
+### Retry and concurrency behavior
 
-- The step-4 `sync_status` claim and the explicit `onConflict` keys on all
-  three upserts make re-runs safe — a retried parse overwrites the same rows
-  rather than duplicating them.
+- The explicit `onConflict` keys on all three upserts make reprocessing the same
+  payload retry-safe; a retry overwrites the same rows rather than duplicating
+  them.
+- The step-4 `sync_status` update is not an atomic compare-and-set or lock.
+  Concurrent cron/manual workers can select and process the same eligible sync.
 - `processTelemetry` only ever picks `in_progress` / `failed` syncs. A sync
   already `'completed'` is **not** re-claimed by the worker; the only
   short-circuit for completed syncs is in `POST /sessions/:id/complete`
@@ -367,20 +369,20 @@ point <i> has no athlete_id'`). Timestamp from `point.timestamp ?? point.ts!`
 
 Groups by athlete; per athlete sorts by timestamp; then for each:
 
-- **Distance** — Haversine (earth radius `6_371_000` m) summed between
+- **Distance**: Haversine (earth radius `6_371_000` m) summed between
   consecutive points; `0` when either coord is null. Rounded.
-- **Sprint count** — transitions **into** `speed_mps >= SPRINT_THRESHOLD_MPS`
+- **Sprint count**: transitions **into** `speed_mps >= SPRINT_THRESHOLD_MPS`
   (`7` m/s); increments once per rising edge.
-- **Max speed** — highest non-null `speed_mps`, or `null`.
-- **Accel mean** — mean of non-null `accel_magnitude`, rounded to 3 decimals;
+- **Max speed**: highest non-null `speed_mps`, or `null`.
+- **Accel mean**: mean of non-null `accel_magnitude`, rounded to 3 decimals;
   `null` if none.
-- **Impact count** — sum of `impact_count` (nulls as 0).
-- **Step count delta** — sum of `step_count_delta` (nulls as 0).
-- **Duration** — `(last - first) / 1000` seconds, floored at 0, rounded.
-- **`data_quality_status`** — `'valid'` when the athlete has ≥ 2 GPS points
+- **Impact count**: sum of `impact_count` (nulls as 0).
+- **Step count delta**: sum of `step_count_delta` (nulls as 0).
+- **Duration**: `(last - first) / 1000` seconds, floored at 0, rounded.
+- **`data_quality_status`**: `'valid'` when the athlete has ≥ 2 GPS points
   (both `latitude` and `longitude` non-null), else `'partial'`. There is no
   `'degraded'` tier.
-- `recordedAt` — the last point's timestamp.
+- `recordedAt`: the last point's timestamp.
 
 ---
 
@@ -393,7 +395,7 @@ Groups by athlete; per athlete sorts by timestamp; then for each:
 | `createIngestUpload` | `format: telemetryFormat.default('json')`, `compression: telemetryCompression.default('gzip')` |
 | `completeIngest` | `sync_id?: uuid`, `size_bytes?: int ≥ 0`, `point_count?: int ≥ 0` |
 | `telemetryListQuery` | `athlete_id?: uuid`, `after_index: coerce int ≥ -1 default -1`, `limit: coerce int 1–5000 default 1000` |
-| `telemetryPoint` | `athlete_id?: uuid`, `timestamp? \| ts?` (one required), `lat? / lng?` (both-or-neither — XOR forbidden), `speed_mps? ≥ 0`, `accel_magnitude? ≥ 0`, `impact_count? int ≥ 0`, `step_count_delta? int ≥ 0` |
+| `telemetryPoint` | `athlete_id?: uuid`, `timestamp? \| ts?` (one required), `lat? / lng?` (both-or-neither, XOR forbidden), `speed_mps? ≥ 0`, `accel_magnitude? ≥ 0`, `impact_count? int ≥ 0`, `step_count_delta? int ≥ 0` |
 | `telemetryEnvelope` | `version: z.literal(1).default(1)`, `session_id?: uuid`, `athlete_id?: uuid`, `firmware_session_id?: string max 100`, `points: array(telemetryPoint).min(1)` |
 
 `timestamp` (internal) is `z.union([z.string().datetime(),
@@ -446,7 +448,7 @@ milliseconds). `lat` and `lng` must always be supplied together.
 | :--- | :--- | :--- | :--- |
 | `TELEMETRY_BUCKET` | `routes/ingest.ts`, `routes/internal.ts` | Private Storage bucket for raw session telemetry. | `'session-telemetry'` |
 | `TELEMETRY_MAX_POINTS` | `lib/telemetry.ts` | Max points accepted in one decoded envelope; **enforced at decode time only**. Applied only when `Number.isSafeInteger(value) && value > 0`. | `100_000` |
-| `CRON_SECRET` | `routes/internal.ts` | Shared secret for `/internal/parse/:sessionId` and `/internal/parse/pending`, via `x-cron-secret` header or `Authorization: Bearer <secret>`. | none — routes always 401 if unset |
+| `CRON_SECRET` | `routes/internal.ts` | Shared secret for `/internal/parse/:sessionId` and `/internal/parse/pending`, via `x-cron-secret` header or `Authorization: Bearer <secret>`. | none (routes always 401 if unset) |
 
 See [Architecture](../architecture) for the full env var reference and
 [Database Schema](../database-schema) for the `sync_records`,

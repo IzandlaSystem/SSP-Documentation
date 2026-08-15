@@ -1,12 +1,12 @@
 ---
 title: Devices API
-description: Hardware tracker registration, BLE mobile pairing, athlete assignment, and firmware-update orchestration in SSP-API (Phase 1 + Phase 3).
+description: Hardware tracker inventory, database pairing/assignment records, and server-side firmware-update contracts in SSP-API (Phase 1 + Phase 3).
 outline: deep
 ---
 
-# Devices API (Phase 1)
+# Devices API (Phase 1 + Phase 3)
 
-The Devices API manages the lifecycle of the **SSP-S1** wearable trackers, including hardware inventory registration, mobile Bluetooth Low Energy (BLE) pairing bonds, athlete assignments, and operational status tracking. It also exposes the device-side firmware-update offer and status-report endpoints that close the OTA loop with the [Firmware OTA](../firmware-ota) pipeline.
+The Devices API manages tracker inventory plus database records for pairing state, athlete assignments, and operational status. The pair/unpair handlers do not contact a phone or tracker and cannot establish or revoke an operating-system BLE bond. It also exposes firmware offer/status contracts, but the current mobile app does not consume them and has no OTA/DFU transport. See [Firmware OTA](../firmware-ota).
 
 All routes are mounted at `/devices` (source: `src/routes/devices.ts`). Unless noted, every handler is JWT-authenticated via the `auth` middleware; roles are loaded from the database on each request (not from the JWT). See [Auth & Security](../auth-and-security).
 
@@ -15,6 +15,10 @@ All routes are mounted at `/devices` (source: `src/routes/devices.ts`). Unless n
 ## 1. List Devices (`GET /devices`)
 
 Lists physical tracking devices registered to an organisation.
+
+::: danger Missing-primary-org behavior
+When a non-super-admin caller has no primary organisation and omits `organisation_id`, the handler adds no organisation filter and reaches an unscoped devices query.
+:::
 
 - **Path:** `/devices`
 - **Method:** `GET`
@@ -59,7 +63,7 @@ The handler performs an org-scope check: if `organisation_id` is supplied and th
 
 | Status | Meaning |
 | :--- | :--- |
-| 403 | Forbidden — caller lacks a required role or fails the org-scope check. |
+| 403 | Forbidden: caller lacks a required role or fails the org-scope check. |
 
 ---
 
@@ -70,7 +74,7 @@ Fetches the full device row plus its complete `device_assignments` and `pairing_
 - **Path:** `/devices/:id`
 - **Method:** `GET`
 - **Auth:** JWT
-- **Required Roles:** none — manual access check. `hasOrgAccess` is evaluated against the loaded device's `organisation_id`; super admins and members of the device's organisation pass.
+- **Required Roles:** none: manual access check. `hasOrgAccess` is evaluated against the loaded device's `organisation_id`; super admins and members of the device's organisation pass.
 - **Tenant Scope:** Org
 - **Path Parameters:**
   - `id` (`uuid`): Device identifier.
@@ -136,8 +140,8 @@ The row is selected as `select('*, device_assignments(*), pairing_states(*)')`, 
 
 | Status | Meaning |
 | :--- | :--- |
-| 403 | Forbidden — caller fails `hasOrgAccess` for the device's organisation. |
-| 404 | Not found — no device with that `id`. |
+| 403 | Forbidden: caller fails `hasOrgAccess` for the device's organisation. |
+| 404 | Not found: no device with that `id`. |
 
 ---
 
@@ -190,7 +194,7 @@ The created `devices` row (`select('*')`).
 
 | Status | Meaning |
 | :--- | :--- |
-| 403 | Forbidden — missing role or fails org-scope check against `body.organisation_id`. |
+| 403 | Forbidden: missing role or fails org-scope check against `body.organisation_id`. |
 | 500 | Unhandled / DB error (`{ error: "<message>" }`). |
 
 ---
@@ -240,15 +244,15 @@ The updated `devices` row.
 
 | Status | Meaning |
 | :--- | :--- |
-| 403 | Forbidden — missing role or fails `hasOrgAccess`. |
-| 404 | Not found — no device with that `id`. |
+| 403 | Forbidden: missing role or fails `hasOrgAccess`. |
+| 404 | Not found: no device with that `id`. |
 | 500 | Unhandled / DB error. |
 
 ---
 
 ## 5. Mobile BLE Pairing (`POST /devices/:id/pair`)
 
-Establishes a BLE bond between the mobile application and the tracker unit. Automatically revokes any prior active pairing for the device before inserting the new bond.
+Records a claimed BLE pairing in `pairing_states`. It automatically revokes any prior active database record for the device before inserting the new row; it does not establish, inspect, or verify a physical/OS BLE bond.
 
 - **Path:** `/devices/:id/pair`
 - **Method:** `POST`
@@ -258,11 +262,11 @@ Establishes a BLE bond between the mobile application and the tracker unit. Auto
 - **Path Parameters:**
   - `id` (`uuid`): Device identifier.
 
-> `athlete` is listed explicitly because `isAthlete` does **not** cascade — a `coach` is not treated as an `athlete` by the role helper. `sub_coach` is **not** included; requiring `coach` admits `coach`, `organisation_admin`, and `ssp_super_admin` but does not cascade down to `sub_coach`.
+> `athlete` is listed explicitly because `isAthlete` does **not** cascade; a `coach` is not treated as an `athlete` by the role helper. `sub_coach` is **not** included; requiring `coach` admits `coach`, `organisation_admin`, and `ssp_super_admin` but does not cascade down to `sub_coach`.
 
 On success the handler:
 
-1. Revokes the prior active pairing — `update pairing_states set revoked_at = now() where device_id = :id and revoked_at is null`.
+1. Attempts to revoke the prior active pairing. The handler ignores this update's returned error, so insertion can continue even if revocation failed.
 2. Inserts a new `pairing_states` row with `bond_status: 'bonded'` and `paired_user_id: user.id`.
 
 ### Request Body Schema (`pairDevice`)
@@ -291,20 +295,22 @@ The created `pairing_states` row.
 
 | Status | Meaning |
 | :--- | :--- |
-| 403 | Forbidden — missing role. |
-| 404 | Not found — no device with that `id`. |
+| 403 | Forbidden: missing role or caller fails device-organisation access. |
+| 404 | Not found: no device with that `id`. |
 | 500 | Unhandled / DB error. |
 
 ---
 
 ## 6. Unpair Device (`POST /devices/:id/unpair`)
 
-Revokes the active BLE pairing bond on a device.
+Marks the active `pairing_states` row revoked. It does not remove a bond from the phone or tracker.
+
+The handler also ignores the pairing-state update result and always returns `{ ok: true }` after device/access checks, even if the database revocation failed.
 
 - **Path:** `/devices/:id/unpair`
 - **Method:** `POST`
 - **Auth:** JWT
-- **Required Roles:** none — manual access check. Any authenticated user with `hasOrgAccess` to the device's organisation can unpair; there is no `requireRoles` gate.
+- **Required Roles:** none: manual access check. Any authenticated user with `hasOrgAccess` to the device's organisation can unpair; there is no `requireRoles` gate.
 - **Tenant Scope:** Org
 - **Path Parameters:**
   - `id` (`uuid`): Device identifier.
@@ -321,8 +327,8 @@ Revokes the active BLE pairing bond on a device.
 
 | Status | Meaning |
 | :--- | :--- |
-| 403 | Forbidden — caller fails `hasOrgAccess` for the device's organisation. |
-| 404 | Not found — no device with that `id`. |
+| 403 | Forbidden: caller fails `hasOrgAccess` for the device's organisation. |
+| 404 | Not found: no device with that `id`. |
 
 ---
 
@@ -362,8 +368,8 @@ The created `device_assignments` row.
 
 | Status | Meaning |
 | :--- | :--- |
-| 403 | Forbidden — missing role. |
-| 404 | Not found — no device with that `id`. |
+| 403 | Forbidden: missing role. |
+| 404 | Not found: no device with that `id`. |
 | 500 | Unhandled / DB error. |
 
 ---
@@ -405,20 +411,20 @@ Removes the current active athlete assignment by setting `unassigned_at` on the 
 
 | Status | Meaning |
 | :--- | :--- |
-| 403 | Forbidden — missing role. |
-| 404 | Not found — no device with that `id`. |
+| 403 | Forbidden: missing role. |
+| 404 | Not found: no device with that `id`. |
 | 500 | Unhandled / DB error. |
 
 ---
 
 ## 9. Firmware Update Offer (`GET /devices/:id/firmware-update`)
 
-Checks whether a newer firmware release is available for the device and, if so, returns a signed download URL. This is a **Phase 3** (firmware OTA) endpoint. See [Firmware OTA](../firmware-ota) for the full publish/parse pipeline.
+Checks whether a newer firmware release is available for the device and, if so, returns a signed download URL. This server route is source-implemented, but no current mobile call site or BLE DFU transport exists. See [Firmware OTA](../firmware-ota).
 
 - **Path:** `/devices/:id/firmware-update`
 - **Method:** `GET`
 - **Auth:** JWT
-- **Required Roles:** none — manual access check via `hasOrgAccess` against the device's `organisation_id`.
+- **Required Roles:** none: manual access check via `hasOrgAccess` against the device's `organisation_id`.
 - **Tenant Scope:** Org
 - **Path Parameters:**
   - `id` (`uuid`): Device identifier.
@@ -487,20 +493,20 @@ When the device has no `protocol_version`, the handler short-circuits before que
 
 | Status | Meaning |
 | :--- | :--- |
-| 403 | Forbidden — caller fails `hasOrgAccess` for the device's organisation. |
-| 404 | Not found — no device with that `id`. |
+| 403 | Forbidden: caller fails `hasOrgAccess` for the device's organisation. |
+| 404 | Not found: no device with that `id`. |
 | 500 | Unhandled / DB / Storage error. |
 
 ---
 
 ## 10. Firmware Update Status Report (`POST /devices/:id/firmware-update/status`)
 
-Records the device-side progress of a firmware update attempt in `device_update_attempts`. This is a **Phase 3** (firmware OTA) endpoint. See [Firmware OTA](../firmware-ota).
+Records caller-reported progress in `device_update_attempts`. A `confirmed` report updates the device version without independent post-reset attestation; the current mobile app does not call this endpoint. See [Firmware OTA](../firmware-ota).
 
 - **Path:** `/devices/:id/firmware-update/status`
 - **Method:** `POST`
 - **Auth:** JWT
-- **Required Roles:** none — manual access check via `hasOrgAccess` against the device's `organisation_id`.
+- **Required Roles:** none: manual access check via `hasOrgAccess` against the device's `organisation_id`.
 - **Tenant Scope:** Org
 - **Path Parameters:**
   - `id` (`uuid`): Device identifier.
@@ -529,11 +535,13 @@ Validated by `zValidator('json', reportFirmwareUpdate)`.
 
 ### Behaviour
 
-1. Loads the referenced `firmware_releases` row; if it does not exist, returns `404 { error: 'Firmware release not found' }`. Otherwise validates compatibility with the device — `target`, `hardware_model`, `hardware_revision`, and `protocol_version` must all match. A mismatch returns `409 { error: 'Firmware release is not compatible with device' }`.
+1. Loads the referenced `firmware_releases` row; if it does not exist, returns `404 { error: 'Firmware release not found' }`. Otherwise validates compatibility with the device: `target`, `hardware_model`, `hardware_revision`, and `protocol_version` must all match. A mismatch returns `409 { error: 'Firmware release is not compatible with device' }`.
 2. If the `attempt_id` already exists but belongs to a different user or device, the request is rejected with `403`.
-3. Upserts the `device_update_attempts` row with the reported `status`, `progress_pct`, `error_code`, and `error_message`.
-4. Terminal statuses — `confirmed`, `failed`, `cancelled` — set `completed_at`.
+3. Updates or inserts the `device_update_attempts` row with the reported values. For an existing attempt, the selected row omits `firmware_release_id`, so the handler does not verify that the new body references the same release as the stored attempt.
+4. Terminal statuses (`confirmed`, `failed`, `cancelled`) set `completed_at`.
 5. On `confirmed`, the handler also updates `devices.firmware_version` and `devices.firmware_version_code` to the release's values, completing the OTA loop.
+
+There is no transition-order validation: any accepted status may be the first report, terminal attempts can be moved back to non-terminal (clearing `completed_at`), and `confirmed` can be submitted directly. The attempt write and device-version write are separate operations; if the latter fails, the attempt can remain stored as confirmed while the endpoint returns 500.
 
 ### Response (`200 OK`)
 
@@ -561,7 +569,7 @@ Validated by `zValidator('json', reportFirmwareUpdate)`.
 
 | Status | Meaning |
 | :--- | :--- |
-| 403 | Forbidden — caller fails `hasOrgAccess`, or the attempt belongs to another user/device. |
-| 404 | Not found — no device with that `id`, or the referenced `firmware_release_id` does not exist. |
-| 409 | Conflict — firmware release is not compatible with the device. |
+| 403 | Forbidden: caller fails `hasOrgAccess`, or the attempt belongs to another user/device. |
+| 404 | Not found: no device with that `id`, or the referenced `firmware_release_id` does not exist. |
+| 409 | Conflict: firmware release is not compatible with the device. |
 | 500 | Unhandled / DB error. |

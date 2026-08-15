@@ -390,7 +390,7 @@ it).
 | `hardware_model` | `text` | NO | |
 | `hardware_revision` | `text` | YES | |
 | `version` | `text` | NO | Zod-validated semver-ish string; not used for ordering. |
-| `version_code` | `bigint` | NO | `CHECK (version_code > 0)`. **This is the version comparator** — `devices.ts` orders `version_code desc`. |
+| `version_code` | `bigint` | NO | `CHECK (version_code > 0)`. **This is the version comparator**: `devices.ts` orders `version_code desc`. |
 | `protocol_version` | `text` | NO | |
 | `storage_bucket` | `text` | NO | `DEFAULT 'firmware-releases'`. |
 | `storage_path` | `text` | NO | `UNIQUE`. |
@@ -699,6 +699,10 @@ Present in the generated types but **not referenced by any route or lib**.
 
 ## Migrations
 
+::: warning Source migrations, not live-project proof
+The three files below are present in the audited working tree and the committed/generated TypeScript file contains their expected columns and tables. This audit did not connect to Supabase or run `supabase migration list`, so it does not prove that these migrations, bucket changes, indexes, RLS settings, or constraints are applied in the live project. The OTA migration enables RLS on its two new tables but creates no policies in this repository.
+:::
+
 All three live in `supabase/migrations/` and are reproduced verbatim in
 intent below. The gateway's service-role client bypasses RLS, but the
 migrations still enable it on the new tables.
@@ -751,6 +755,8 @@ migrations still enable it on the new tables.
   devices."; `device_update_attempts` is
   "Mobile-reported OTA transfer and confirmation outcomes."
 
+Those are descriptive SQL comments only. No migration constraint or gateway code verifies an MCUboot signature or a physical confirmation outcome.
+
 ### 2. `20260723225239_firmware_ota_foreign_key_indexes.sql`
 
 - `device_update_attempts_release_idx` on `public.device_update_attempts (firmware_release_id)`
@@ -772,9 +778,10 @@ alter table public.devices
 - **No Views, Functions, Enums, or CompositeTypes** are declared in
   `src/lib/database.types.ts` (each section is `[_ in never]: never`). All
   "enum-like" columns (`status`, `target_scope`, `sync_status`, `membership_type`,
-  etc.) are plain `text` in the DB, not Postgres enums. The enumerated values
-  above come from the Zod schemas and parser/code constants, not from DB
-  constraints (except the two `CHECK` constraints in migration 1).
+  etc.) are plain `text` rather than Postgres enums. Some OTA fields have
+  explicit migration `CHECK` constraints (`target`, version/file bounds,
+  digest format, attempt status/progress, and device version code); many older
+  text status values are enforced only by application schemas/constants.
 - **`session_telemetry_points.location` is `unknown`** in the generated types.
   It is a PostGIS `geography` column; the parser writes
   `SRID=4326;POINT(lng lat)` strings (or `null` when lat/lng are absent).
@@ -782,18 +789,20 @@ alter table public.devices
 
 ## Regenerating types
 
-`src/lib/database.types.ts` is generated from the live Supabase schema and
-committed. Regenerate it after any migration so response types stay accurate
-(from the project README):
+`src/lib/database.types.ts` is committed and described by the repo as generated
+from Supabase. The audit confirmed that it contains the local OTA additions but
+did not regenerate it from or compare it with the live project. Regenerate it
+after applying migrations so response types stay accurate:
 
 ```bash
 npx supabase gen types typescript --project-id <ref> > src/lib/database.types.ts
 # then: npm run typecheck && npm run build && commit dist/
 ```
 
-This is what gives both client apps typed responses (not just typed
-requests): `createClient<Database>(...)` types every query, so `c.json(data)`
-carries concrete row types into `AppType` and out via `hono/client`.
+This gives `AppType` consumers typed responses: `createClient<Database>(...)`
+types every query, so `c.json(data)` carries concrete row types into the
+published contract. Neither current client consumes `AppType`; both maintain
+local types.
 
 ---
 

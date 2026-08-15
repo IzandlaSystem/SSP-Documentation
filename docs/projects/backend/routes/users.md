@@ -6,7 +6,7 @@ outline: deep
 
 # Users & Profile API (Phase 1)
 
-The Users API exposes the authenticated caller's own identity, profile, and active roles. It is mounted at the root (`/`) in `src/app.ts`, so its only paths are `/me` and `PATCH /me` — there is no collection route. Both handlers read and write the `users` table keyed by the JWT subject (`user.id`); no role gate is applied, so any valid JWT holder may read or patch their own row. Roles are merged into the response from `user.roles` (loaded from the DB on every request — see [Auth & Security](../auth-and-security)).
+The Users API exposes the authenticated caller's own identity, profile, and active roles. It is mounted at the root (`/`) in `src/app.ts`, so its only paths are `/me` and `PATCH /me`; there is no collection route. Both handlers read and write the `users` table keyed by the JWT subject (`user.id`); no role gate is applied, so any valid JWT holder may read or patch their own row. Roles are merged into the response from `user.roles` (loaded from the DB on every request; see [Auth & Security](../auth-and-security)).
 
 Source: `src/routes/users.ts`.
 
@@ -19,12 +19,12 @@ Returns the identity, profile details, primary organisation, active flag, and ac
 - **Path:** `/me`
 - **Method:** `GET`
 - **Auth:** JWT (Supabase access token verified by the `auth` middleware)
-- **Required Roles:** none — any authenticated user
+- **Required Roles:** none (any authenticated user)
 - **Tenant Scope:** Self (the row is selected by `user.id`)
 
 ### Response (`200 OK`)
 
-The handler selects `id, email, phone, full_name, avatar_url, primary_organisation_id, is_active` from the `users` table (`maybeSingle`) and merges `user.roles`. If no `users` row matches the JWT subject, `data` is `null` and the response body is `{ roles: [...] }` (still HTTP 200).
+The handler selects `id, email, phone, full_name, avatar_url, primary_organisation_id, is_active` from the `users` table (`maybeSingle`) and merges `user.roles`. It ignores the returned query error, so either a missing row or a Supabase read failure can produce `{ roles: [...] }` with HTTP 200.
 
 ```json
 {
@@ -57,12 +57,12 @@ Updates editable personal profile fields for the authenticated caller. Only the 
 - **Path:** `/me`
 - **Method:** `PATCH`
 - **Auth:** JWT
-- **Required Roles:** none — any authenticated user
+- **Required Roles:** none (any authenticated user)
 - **Tenant Scope:** Self (the row is updated by `user.id`)
 
 ### Request Body Schema (`patchMe`)
 
-Defined locally in `src/routes/users.ts` (not in `src/schemas/`). Validated with `safeParse` — not `zValidator('json', …)` — so a validation failure returns a custom `400 { error: 'Invalid body', issues: [...] }` envelope rather than the `@hono/zod-validator` default.
+Defined locally in `src/routes/users.ts` (not in `src/schemas/`). Validated with `safeParse`, not `zValidator('json', …)`, so a validation failure returns a custom `400 { error: 'Invalid body', issues: [...] }` envelope rather than the `@hono/zod-validator` default.
 
 | Field | Type | Required | Constraints | Description |
 | :--- | :--- | :---: | :--- | :--- |
@@ -83,7 +83,7 @@ All fields are optional; the schema is a plain `z.object({ … }).partial()`-equ
 
 ### Response (`200 OK`)
 
-The handler runs `db().from('users').update(parsed.data).eq('id', user.id).select('id, email, phone, full_name, avatar_url, primary_organisation_id').single()` and merges `user.roles`. Note the PATCH response omits `is_active` (the GET response includes it), and uses `.single()` — if no row matched the JWT subject the query throws and surfaces as an unhandled `500 { error: "<message>" }`.
+The handler runs `db().from('users').update(parsed.data).eq('id', user.id).select('id, email, phone, full_name, avatar_url, primary_organisation_id').single()` and merges `user.roles`. The PATCH response omits `is_active`. It also ignores the returned Supabase `error`; because object-spreading null yields no fields, a failed/no-row update can return `200 { roles: [...] }` rather than 500.
 
 ```json
 {
@@ -106,4 +106,4 @@ The handler runs `db().from('users').update(parsed.data).eq('id', user.id).selec
 | :--- | :--- | :--- |
 | 400 | `{ "error": "Invalid body", "issues": [...] }` | Body failed `patchMe.safeParse` (bad URL, field too long, wrong type). |
 | 401 | `{ "error": "Missing or malformed Authorization header" }` / `{ "error": "Invalid or expired token" }` | Bad or missing JWT. |
-| 500 | `{ "error": "<message>" }` | Unhandled DB error or no `users` row matched `user.id` (`.single()` throws). |
+| 200 | `{ "roles": [...] }` | Current failure mode when Supabase returns `data: null` plus an ignored query error. |

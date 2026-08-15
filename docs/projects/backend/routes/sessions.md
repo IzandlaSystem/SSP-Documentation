@@ -8,7 +8,7 @@ outline: deep
 
 The Sessions API manages training sessions and competitive matches, tracking the complete session lifecycle from initial scheduling through live recording, participant enrollment, and session finalization. All routes are JWT-authenticated and mounted at `/sessions` (source: `src/routes/sessions.ts`). Access to an individual session is gated by `loadSessionAccess` (source: `src/lib/session-access.ts`), which admits super admins, the session creator, org admins of the session's organisation, coaches/sub-coaches of the session's team, and enrolled athletes.
 
-Per-session metrics, summaries, and targets live under `/sessions/:id/metrics`, `/sessions/:id/summary`, and `/sessions/:id/targets` but are owned by `metrics.ts` — see [Metrics & Targets](./metrics). Telemetry upload, sync, and point retrieval live under `/sessions/:id/ingest-url|complete|sync|telemetry` and are owned by `ingest.ts` — see [Ingestion Pipeline](../ingestion-pipeline). Those sub-paths are not documented here.
+Per-session metrics, summaries, and targets live under `/sessions/:id/metrics`, `/sessions/:id/summary`, and `/sessions/:id/targets` but are owned by `metrics.ts`; see [Metrics & Targets](./metrics). Telemetry upload, sync, and point retrieval live under `/sessions/:id/ingest-url|complete|sync|telemetry` and are owned by `ingest.ts`; see [Ingestion Pipeline](../ingestion-pipeline). Those sub-paths are not documented here.
 
 ---
 
@@ -43,15 +43,19 @@ Lists sessions visible to the caller. Visibility is enforced in-memory after the
 - **Path:** `/sessions`
 - **Method:** `GET`
 - **Auth:** JWT
-- **Required Roles:** none — manual visibility filter
+- **Required Roles:** none: manual visibility filter
 - **Tenant Scope:** Team / User (super admin sees all; org admin sees org matches; others see sessions on their teams or that they created)
-- **Query Parameters** (parsed manually via `sessionListQuery` on `c.req.query`):
+- **Query Parameters** (parsed with throwing `sessionListQuery.parse` on `c.req.query`):
   - `team_id` (`uuid`, optional): Filters `eq('team_id', …)`.
   - `status` (`string`, optional): Filters `eq('status', …)` (e.g. `ready`, `recording`, `paused`, `ended`, `syncing`, `synced`).
   - `limit` (`integer`, optional, default: `25`, coerced, `1`–`100`): Page size.
   - `offset` (`integer`, optional, default: `0`, coerced, min `0`): Page offset.
 
 The DB query selects `*`, applies optional `team_id`/`status` filters, orders `created_at desc`, and ranges `offset` to `offset + limit - 1`. `filterVisibleSessions` then drops rows the caller cannot see: super admins keep all; org admins keep rows where `organisation_id === ctx.primaryOrganisationId`; everyone else keeps rows whose `team_id` is in their loaded `teamIds`, or where `created_by_user_id === user.id` when `team_id` is null.
+
+::: warning Query and pagination behavior
+Invalid query values throw from `.parse` and currently become an unhandled `500`, not a validation `400`. Pagination is applied before the in-memory visibility filter, so a response can contain fewer than `limit` rows and visible rows outside the fetched DB range can be skipped.
+:::
 
 ### Response (`200 OK`)
 
@@ -94,7 +98,7 @@ Fetches a single session row with its participants and summaries nested.
 - **Path:** `/sessions/:id`
 - **Method:** `GET`
 - **Auth:** JWT
-- **Required Roles:** none — access via `loadSessionAccess`
+- **Required Roles:** none: access via `loadSessionAccess`
 - **Tenant Scope:** Team / Org / Self (per `loadSessionAccess`)
 - **Path Parameters:**
   - `id` (`uuid`): Session ID.
@@ -275,7 +279,7 @@ Transitions a session to `recording`, stamps `actual_start_at` with the current 
 - **Path:** `/sessions/:id/start`
 - **Method:** `POST`
 - **Auth:** JWT
-- **Required Roles:** `coach`, `athlete`, `organisation_admin`, `ssp_super_admin` (via `requireRoles`; `athlete` is listed explicitly because `isAthlete` does not cascade — a coach is not admitted as an athlete)
+- **Required Roles:** `coach`, `athlete`, `organisation_admin`, `ssp_super_admin` (via `requireRoles`; `athlete` is listed explicitly because `isAthlete` does not cascade; a coach is not admitted as an athlete)
 - **Tenant Scope:** per `loadSessionAccess`
 - **Path Parameters:**
   - `id` (`uuid`): Session ID.
@@ -310,7 +314,7 @@ The updated `sessions` row with `status: 'recording'`, `actual_start_at: <now>`,
 
 ## 6. Pause Session (`POST /sessions/:id/pause`)
 
-Temporarily pauses active recording. Sets `status: 'paused'`; no other fields change.
+Pauses active recording. Sets `status: 'paused'`; no other fields change.
 
 - **Path:** `/sessions/:id/pause`
 - **Method:** `POST`
@@ -449,12 +453,16 @@ No request body.
 
 ## 10. Delete Session (`DELETE /sessions/:id`)
 
-Permanently deletes a session. No `requireRoles` gate — access is manual: the caller must be an `organisation_admin` or `ssp_super_admin`, or the session creator (`created_by_user_id === user.id`).
+Deletes a session. No `requireRoles` gate; access is manual: the caller must be an `organisation_admin` or `ssp_super_admin`, or the session creator (`created_by_user_id === user.id`).
+
+::: danger Organisation-admin scope gap
+The handler selects only `created_by_user_id, team_id` and does not call `loadSessionAccess` or compare `organisation_id`. Any caller with the literal `organisation_admin` role can delete a session from another organisation if they know its id.
+:::
 
 - **Path:** `/sessions/:id`
 - **Method:** `DELETE`
 - **Auth:** JWT
-- **Required Roles:** none — manual admin or creator check
+- **Required Roles:** none: manual admin or creator check
 - **Tenant Scope:** Org / Self
 - **Path Parameters:**
   - `id` (`uuid`): Session ID.

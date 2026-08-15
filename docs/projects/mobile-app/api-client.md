@@ -7,7 +7,7 @@ outline: deep
 # API Client & Data Layer
 
 ::: warning Plainly stated
-The SSP Mobile App talks to [SSP-API](../backend/index) through a **hand-rolled `fetch` client** in [`src/lib/api.ts`](https://github.com/IzandlaSystem/SSP-Mobile-App/blob/main/src/lib/api.ts) — `createApiClient({ baseUrl, getAccessToken, fetchImpl })`. It is **NOT** Hono `hc()`, **NOT** `hono/client`, and there is **NO `AppType` contract import**. The backend *publishes* an `AppType` contract (see [Backend Client Contract](../backend/client-contract)); the mobile app does **not currently consume it**. The only `createClient` in this repo is `@supabase/supabase-js`'s auth client in `src/lib/supabase.ts`. The mobile app calls the same gateway paths as the typed web client, but via its own fetch wrapper.
+The SSP Mobile App talks to [SSP-API](../backend/index) through a **hand-rolled `fetch` client** in [`src/lib/api.ts`](https://github.com/IzandlaSystem/SSP-Mobile-App/blob/main/src/lib/api.ts): `createApiClient({ baseUrl, getAccessToken, fetchImpl })`. It is **NOT** Hono `hc()`, **NOT** `hono/client`, and there is **NO `AppType` contract import**. The backend *publishes* an `AppType` contract (see [Backend Client Contract](../backend/client-contract)); the mobile app does **not currently consume it**. The only `createClient` in this repo is `@supabase/supabase-js`'s auth client in `src/lib/supabase.ts`. The mobile app calls the same gateway paths as the typed web client through its own fetch wrapper.
 :::
 
 This page covers the client factory, the `request<T>` engine, the `ApiError` class, the exported `api` singleton and its default `baseUrl`/`getAccessToken`, the response types, the 28-method endpoint surface, `uploadToSignedUrl` (the one no-bearer call), the `api-session-adapter` conversions, the Supabase client setup, and the three React hooks that carry real API data into the UI.
@@ -46,7 +46,7 @@ The factory builds a client object whose every method funnels through one intern
 
 Every gateway method goes through `request`. Its contract:
 
-1. `const token = await getAccessToken()` — if there is no token it throws `ApiError("You must sign in first.", 401)` **locally**, before any network call. `api.test.ts` asserts `fetchImpl` is never invoked in this case.
+1. `const token = await getAccessToken()`: if there is no token, it throws `ApiError("You must sign in first.", 401)` **locally**, before any network call. `api.test.ts` asserts `fetchImpl` is never invoked in this case.
 2. Sets headers: `Authorization: Bearer <token>`, `Accept: application/json`, and `Content-Type: application/json` only when a `body` is present and the caller hasn't already set one.
 3. Calls `fetchImpl(${root}${path}, { ...init, headers })`.
 4. Reads `content-type`; parses JSON only when the response is `application/json`, otherwise `payload` is `undefined`.
@@ -62,7 +62,7 @@ export class ApiError extends Error {
 }
 ```
 
-`ApiErrorPayload` is `{ error?: string; issues?: unknown }` — the gateway's error envelope. `api.test.ts` verifies a 403 `{ error: "Forbidden" }` surfaces as `error.message === "Forbidden"` and `error.status === 403`.
+`ApiErrorPayload` is `{ error?: string; issues?: unknown }`, the gateway's error envelope. `api.test.ts` verifies a 403 `{ error: "Forbidden" }` surfaces as `error.message === "Forbidden"` and `error.status === 403`.
 
 ### The `api` singleton and defaults
 
@@ -98,13 +98,13 @@ uploadToSignedUrl: async (signedUrl: string, body: BodyInit, contentType = "appl
 }
 ```
 
-It PUTs the telemetry payload straight to a pre-signed storage URL returned by `createIngestUrl`. **No `Authorization` header is added** — the signed URL already carries its own `token` query parameter granting short-lived write access. `api.test.ts` asserts `headers.get("Authorization")` is `null` for this call. This is the upload step in the [Ingestion Pipeline](../backend/ingestion-pipeline); see [Tracker & Sync](./tracker-and-sync) for how `sync.ts` chains `createIngestUrl → uploadToSignedUrl → completeIngest`.
+It PUTs the telemetry payload straight to a pre-signed storage URL returned by `createIngestUrl`. **No `Authorization` header is added** because the signed URL carries its own `token` query parameter granting short-lived write access. `api.test.ts` asserts `headers.get("Authorization")` is `null` for this call. This is the upload step in the [Ingestion Pipeline](../backend/ingestion-pipeline); see [Tracker & Sync](./tracker-and-sync) for how `sync.ts` chains `createIngestUrl → uploadToSignedUrl → completeIngest`.
 
 ---
 
 ## 2. Response types
 
-All types live in `src/lib/api.ts`. They mirror the gateway's row shapes but are **re-declared locally** (not imported from the backend contract) — this is the consequence of not consuming `AppType`.
+All types live in `src/lib/api.ts`. They mirror the gateway's row shapes but are **re-declared locally** (not imported from the backend contract), a consequence of not consuming `AppType`.
 
 | Type | Shape | Notes |
 | :--- | :--- | :--- |
@@ -158,10 +158,10 @@ The table below is the canonical method → path → verb map. The test `"maps e
 | 27 | `assignDevice(id, athleteId)` | `/devices/{id}/assign` | POST | [Devices](../backend/routes/devices) |
 | 28 | `unassignDevice(id)` | `/devices/{id}/assign` | DELETE | [Devices](../backend/routes/devices) |
 
-::: details Row 29 — the signed-URL PUT (not a gateway endpoint)
+::: details Row 29: the signed-URL PUT (not a gateway endpoint)
 | Method | Path | HTTP | Bearer? |
 | :--- | :--- | :--- | :--- |
-| `uploadToSignedUrl(signedUrl, body, contentType?)` | a pre-signed storage URL returned by `createIngestUrl` | PUT | **None** — the URL's own `token` query param authorizes the write. |
+| `uploadToSignedUrl(signedUrl, body, contentType?)` | a pre-signed storage URL returned by `createIngestUrl` | PUT | **None** (the URL's own `token` query param authorizes the write). |
 This is a client method but not a gateway route, so it is not counted in the 28 gateway endpoints above. `sync.ts` uses it to push `toTelemetryEnvelope` output to object storage, then calls `completeIngest` to close the sync record. See [Tracker & Sync](./tracker-and-sync).
 :::
 
@@ -192,7 +192,7 @@ The gateway returns raw `ApiSession` / `ApiSessionMetric[]` / `ApiTelemetryPoint
 | `intensity(metrics)` | `SessionMetrics` | `"Max" \| "High" \| "Moderate" \| "Low"` | `trainingLoadAu >= 85 → "Max"`; `>= 65 → "High"`; `>= 35 → "Moderate"`; else `"Low"`. |
 | `telemetryToHeatPoints(telemetry)` | `ApiTelemetryPoint[]` | `GpsHeatPoint[]` | Drops points with null lat/lng; normalizes longitude to `x ∈ [0,1]` and latitude to `y ∈ [0,1]` (inverted, so north is up); `intensity = speed_mps / maxSpeed`. Returns `[]` when no located points. |
 
-The adapter is the only place raw API shapes are translated for the UI. It does **not** fabricate data — empty metrics/telemetry yield `EMPTY_METRICS` and `[]` respectively.
+The adapter is the only place raw API shapes are translated for the UI. It does **not** fabricate data; empty metrics/telemetry yield `EMPTY_METRICS` and `[]` respectively.
 
 ---
 
@@ -211,13 +211,13 @@ import { AppState, Platform } from "react-native";
 | :--- | :--- | :--- |
 | URL | `process.env.EXPO_PUBLIC_SUPABASE_URL` | required, throws if missing |
 | Anon/publishable key | `process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY \|\| process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY` | fallback to the legacy `ANON_KEY` name; throws if both absent |
-| `auth.storage` | `Platform.OS === "web" ? undefined : AsyncStorage` | AsyncStorage on native, in-memory default on web |
+| `auth.storage` | `Platform.OS === "web" ? undefined : AsyncStorage` | AsyncStorage on native; on web the SDK uses its browser storage default (normally local storage when available) |
 | `autoRefreshToken` | `true` | |
 | `persistSession` | `true` | session persisted to `storage` |
 | `detectSessionInUrl` | `false` | a mobile app, not a browser redirect flow |
 | AppState refresh | on native, `AppState.addEventListener("change", …)` calls `startAutoRefresh()` when `"active"` and `stopAutoRefresh()` otherwise | keeps the JWT fresh when the app returns to foreground |
 
-The thrown error is `"Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY / EXPO_PUBLIC_SUPABASE_ANON_KEY"` — the app will not boot without these (see [Configuration](./configuration)). The `api.getAccessToken` token provider reads the access token this client persists.
+The thrown error is `"Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY / EXPO_PUBLIC_SUPABASE_ANON_KEY"`. The app will not boot without these (see [Configuration](./configuration)). The `api.getAccessToken` token provider reads the access token this client persists.
 
 ### Session role helper — `src/lib/session.ts`
 
@@ -233,7 +233,7 @@ The thrown error is `"Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_P
 
 ## 6. Hooks
 
-Three hooks carry real API data into the UI. Per the [mock-vs-real contract](./dashboard-and-analytics), **only these hooks and `useApiMe` feed non-mock data** — every `MOCK_*` array on dashboards is empty.
+Three data hooks carry real API data into the UI: `useApiMe`, `useApiSessions`, and `useApiSession`. `useRoleGuard` is also documented below, but it reads the local/Supabase role helper rather than fetching gateway data. Per the [mock-vs-real contract](./dashboard-and-analytics), the dashboard charts still use empty `MOCK_*` arrays.
 
 ### `useApiMe()` — `src/hooks/use-api-me.ts`
 
@@ -247,17 +247,17 @@ Calls `api.getMe()` once on mount, sets `data` on success or `error` (the `Error
 
 **`useApiSessions()`** returns `{ data: MockTrainingSession[]; loading: boolean; error: string | null }`:
 
-1. `supabase.auth.getSession()` — if there is no session, returns `{ data: [], loading: false, error: null }` immediately (no API call).
+1. `supabase.auth.getSession()`: if there is no session, returns `{ data: [], loading: false, error: null }` immediately (no API call).
 2. `api.listSessions({ limit: 100 })`.
 3. Maps each `ApiSession` through `apiSessionToTrainingSession(session)` (no per-athlete focus; `metrics` and `telemetry` default to `[]`).
 4. Sets the array, or an error message on failure.
 
-Used by `SessionHistorySection` on both coach and player analytics screens — this is the **real** session history list, not a `MOCK_*` array.
+Used by `SessionHistorySection` on both coach and player analytics screens. This is the **real** session history list, not a `MOCK_*` array.
 
 **`useApiSession(sessionId, athleteId?)`** returns `{ data: MockTrainingSession | null; loading: boolean; error: string | null }`:
 
 1. `Promise.all([api.getSession(id), api.getMetrics(id).catch(() => ({ metrics: [] })), api.getTelemetry(id, { athleteId, limit: 5000 }).catch(() => ({ points: [], next_after_index: -1, has_more: false }))])`.
-2. The `getMetrics` and `getTelemetry` calls **fail open** — a missing-metrics/telemetry response degrades to empty arrays rather than failing the whole detail.
+2. The `getMetrics` and `getTelemetry` calls **fail open**: a missing-metrics/telemetry response degrades to empty arrays rather than failing the whole detail.
 3. `apiSessionToTrainingSession(session, metrics, telemetry, athleteId)` assembles the `MockTrainingSession`.
 4. Error message fallbacks: `"Unable to load this session."`.
 
@@ -269,7 +269,9 @@ Used by `SessionDetailScreen` (the bounded Previous/Next detail view). The 5000-
 export function useRoleGuard(allowedRole: Role): void
 ```
 
-On mount, resolves `getUserRole()`; if the actual role differs from `allowedRole`, `router.replace`s to that role's tab — coach → `/(coach)/(tabs)/home`, player → `/(player)/(tabs)/dashboard`. This is the guard mounted in each role group's `_layout.tsx` (see [Architecture](./architecture)). An `active` flag prevents a replace after unmount.
+On mount, resolves `getUserRole()`; if the actual role differs from `allowedRole`, `router.replace`s to that role's tab (coach → `/(coach)/(tabs)/home`, player → `/(player)/(tabs)/dashboard`). This is the guard mounted in each role group's `_layout.tsx` (see [Architecture](./architecture)). An `active` flag prevents a replace after unmount.
+
+`useRoleGuard` is UI routing only. Because `getUserRole` may fall back to `user_metadata` or AsyncStorage, it must not be treated as authorization; the gateway remains responsible for enforcing verified roles.
 
 ---
 
@@ -308,11 +310,11 @@ No other discrepancies: every path and HTTP verb in the source map §6 table mat
 
 ## 8. Related
 
-- [Backend Client Contract](../backend/client-contract) — the `AppType` / `hc<AppType>()` typed RPC the **web** app uses. The mobile app calls the same paths via its own fetch client; it does not import `AppType`.
-- [Backend API Reference](../backend/api-reference) — per-resource endpoint details for the gateway the mobile `api` calls.
-- [Backend Auth & Security](../backend/auth-and-security) — how the gateway verifies the Supabase JWT the mobile `getAccessToken` returns.
-- [Backend Ingestion Pipeline](../backend/ingestion-pipeline) — `createIngestUrl → uploadToSignedUrl → completeIngest`, the sync flow `src/features/tracker/sync.ts` drives.
-- [Tracker & Sync](./tracker-and-sync) — the live tracking + firmware-session upload path that consumes `startSession`/`stopSession`/`createIngestUrl`/`completeIngest`.
-- [Auth & Onboarding](./auth-and-onboarding) — the sign-in flow that establishes the Supabase session `getAccessToken` reads from.
-- [Dashboard & Analytics](./dashboard-and-analytics) — which screens consume `useApiMe` / `useApiSessions` / `useApiSession` (and which use empty `MOCK_*`).
-- [Configuration](./configuration) — `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_SUPABASE_URL`, and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+- [Backend Client Contract](../backend/client-contract): the `AppType` / `hc<AppType>()` typed RPC the **web** app uses. The mobile app calls the same paths via its own fetch client; it does not import `AppType`.
+- [Backend API Reference](../backend/api-reference): per-resource endpoint details for the gateway the mobile `api` calls.
+- [Backend Auth & Security](../backend/auth-and-security): how the gateway verifies the Supabase JWT the mobile `getAccessToken` returns.
+- [Backend Ingestion Pipeline](../backend/ingestion-pipeline): `createIngestUrl → uploadToSignedUrl → completeIngest`, the sync flow `src/features/tracker/sync.ts` drives.
+- [Tracker & Sync](./tracker-and-sync): the live tracking + firmware-session upload path that consumes `startSession`/`stopSession`/`createIngestUrl`/`completeIngest`.
+- [Auth & Onboarding](./auth-and-onboarding): the sign-in flow that establishes the Supabase session `getAccessToken` reads from.
+- [Dashboard & Analytics](./dashboard-and-analytics): which screens consume `useApiMe` / `useApiSessions` / `useApiSession` (and which use empty `MOCK_*`).
+- [Configuration](./configuration): `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_SUPABASE_URL`, and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
