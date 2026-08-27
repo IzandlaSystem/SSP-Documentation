@@ -12,12 +12,14 @@ The Workload API exposes longitudinal training-load and readiness records for an
 
 ## 1. Get Athlete Workload (`GET /athletes/:id/workload`)
 
+`organisation_admin` is accepted without comparing the athlete to the caller's organisation. This is a current cross-tenant source gap; coaches and athletes use the narrower shared-team/self checks described below.
+
 Returns the daily workload and readiness rows recorded for an athlete over an optional date window, ordered by `recorded_at` ascending.
 
 - **Path:** `/athletes/:id/workload`
 - **Method:** `GET`
 - **Auth:** JWT
-- **Required Roles:** none — manual access check via `canSeeAthlete`. The following pass:
+- **Required Roles:** none (manual access check via `canSeeAthlete`). The following pass:
   - `organisation_admin` and `ssp_super_admin` (always)
   - The athlete themselves, when the athlete row's `user_id === user.id`
   - A `coach` whose `loadCallerContext` team ids intersect one of the athlete's active (`left_at is null`) `team_memberships.team_id`

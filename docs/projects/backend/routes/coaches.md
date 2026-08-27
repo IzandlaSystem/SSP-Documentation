@@ -18,6 +18,10 @@ Source: `src/routes/coaches.ts`, schema `createCoach` in `src/schemas/athlete.ts
 
 ## 1. List Coaches (`GET /coaches`)
 
+::: danger Missing-primary-org behavior
+When a non-super-admin caller has no primary organisation and omits `organisation_id`, the handler does not add an organisation-membership filter and returns an unscoped coach query.
+:::
+
 Lists coaches in the caller's organisation. When `organisation_id` is supplied (or
 inferred from the caller's primary organisation), the result is restricted to
 coaches with an active `organisation_memberships` row
@@ -68,7 +72,7 @@ Returns `{ coaches: [...] }` where each row is the full `coaches` record
 ## 2. Create Coach (`POST /coaches`)
 
 Creates a new coach row linked to an existing user. There is no org-scope check
-on insert — authorisation relies on the `organisation_admin` / `ssp_super_admin`
+on insert. Authorisation relies on the `organisation_admin` / `ssp_super_admin`
 role gate and the database. Organisational membership is assigned separately via
 `organisation_memberships`.
 

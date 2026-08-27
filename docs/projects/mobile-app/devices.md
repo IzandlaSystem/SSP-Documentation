@@ -6,35 +6,35 @@ outline: deep
 
 # Device Management (Demo)
 
-The Devices feature is **Demo/mock only**. It lets coaches and athletes browse a simulated SSP-S1 tracker inventory, pair/rename/assign trackers, sync sessions, and check for firmware updates — all without contacting any hardware.
+The Devices feature is **Demo/mock only**. It lets coaches and athletes browse a simulated SSP-S1 tracker inventory, pair/rename/assign trackers, sync sessions, and check for firmware updates, all without contacting any hardware.
 
-This is enforced by a source-contract test (`device-ui-source.test.mjs`, `forbiddenDeviceImport` regex): the `src/features/devices/**` tree must **not** import `react-native-ble-plx`, Supabase, AsyncStorage, or any BLE/DFU service. Every Bluetooth-style action is simulated with a fixed `DEMO_DELAY_MS = 650` timer and a truthfulness disclosure — "Demo complete — no hardware was contacted." Real device BLE (GATT connect, session record/download, A-GPS assist, signed-URL upload) lives in the Tracker feature; see [Live Tracking & Sync](./tracker-and-sync). The "Open hardware connection" banner in Device Hub links to the real firmware flow at `/(role)/device/firmware`.
+This is enforced by a source-contract test (`device-ui-source.test.mjs`, `forbiddenDeviceImport` regex): the `src/features/devices/**` tree must **not** import `react-native-ble-plx`, Supabase, AsyncStorage, or any BLE/DFU service. Every Bluetooth-style action is simulated with a fixed `DEMO_DELAY_MS = 650` timer and a truthfulness disclosure (`"Demo complete \u2014 no hardware was contacted."`, with the code point escaped here). Real device BLE (GATT connect, session record/download, A-GPS assist, signed-URL upload) lives in the Tracker feature; see [Live Tracking & Sync](./tracker-and-sync). The "Open hardware connection" banner in Device Hub links to the real firmware flow at `/(role)/device/firmware`.
 
-The backend [Devices API](../backend/routes/devices) (`/devices`, `/devices/:id/pair`, `/devices/:id/assign`, `/devices/:id/firmware-update`) is the real server contract for tracker registration, pairing bonds, and OTA offers. The mobile Devices feature does **not** call that API — it is self-contained mock state. The Tracker feature is what eventually talks to the gateway.
+The backend [Devices API](../backend/routes/devices) (`/devices`, `/devices/:id/pair`, `/devices/:id/assign`, `/devices/:id/firmware-update`) is the server contract for tracker registration, pairing bonds, and OTA offers. The mobile Devices feature does **not** call that API; it is self-contained mock state. The Tracker feature calls session/ingestion gateway routes, but it does not implement the Devices API or an OTA/DFU client.
 
 ---
 
-## 1. Provider — `DeviceDemoProvider`
+## 1. Provider: `DeviceDemoProvider`
 
 **Source:** `src/features/devices/DeviceDemoProvider.tsx`
 
-`DeviceDemoProvider` wraps each role group's Stack (`src/app/(coach)/_layout.tsx`, `src/app/(player)/_layout.tsx`) and holds all device state in a `useReducer(deviceReducer, undefined, createInitialDeviceState)` store. It is intentionally a local React context — nothing is persisted.
+`DeviceDemoProvider` wraps each role group's Stack (`src/app/(coach)/_layout.tsx`, `src/app/(player)/_layout.tsx`) and holds all device state in a `useReducer(deviceReducer, undefined, createInitialDeviceState)` store. It is a local React context; nothing is persisted.
 
 | Concern | Implementation |
 | :--- | :--- |
-| Demo delay | `DEMO_DELAY_MS = 650` — every simulated BLE operation waits this long via a single shared `wait()` promise. |
+| Demo delay | `DEMO_DELAY_MS = 650`. Every simulated BLE operation waits this long via a single shared `wait()` promise. |
 | One operation at a time | `operationLocked` ref gates `runOperation`; a second connect/sync/update is a no-op while one is running. |
 | Unmount safety | `mountedRef` + `pendingTimerRef` + `pendingResolveRef` cancel the pending Demo timer and resolve the promise on unmount, so a completed operation never dispatches into an unmounted provider. |
 | Coach-only assignment | `assignDevice` early-returns when `role !== "coach"`. The reducer re-checks this (`deviceAssigned` ignores non-coach). |
-| Player roster | `players: selectRolePlayers(state, role)` — coach sees `MOCK_DEVICE_PLAYERS`, player gets `[]`. |
+| Player roster | `players: selectRolePlayers(state, role)`: coach sees `MOCK_DEVICE_PLAYERS`, player gets `[]`. |
 
 Context value (`DeviceDemoContextValue`):
 
 | Field | Behavior |
 | :--- | :--- |
-| `devices` | `selectVisibleDevices(state, role)` — coach by org, player by `ownerPlayerId`. |
-| `discoveredDevices` | `selectDiscoveredDevices(state)` — mock scan results with `registered` flag recomputed. |
-| `players` | `selectRolePlayers(state, role)` — roster for coach, empty for player. |
+| `devices` | `selectVisibleDevices(state, role)`: coach by org, player by `ownerPlayerId`. |
+| `discoveredDevices` | `selectDiscoveredDevices(state)`: mock scan results with `registered` flag recomputed. |
+| `players` | `selectRolePlayers(state, role)`: roster for coach, empty for player. |
 | `activeOperation` | Current `DeviceOperation` (running/succeeded/failed) or `undefined`. |
 | `getDevice(id)` | Lookup in visible devices. |
 | `addDevice(input)` | Synchronous; runs `getDeviceAddResult` against `stateRef.current`, applies `deviceReducer`, returns `AddDeviceResult` (ok/failure reason). |
@@ -57,7 +57,7 @@ flowchart LR
 
 ---
 
-## 2. State — `device-state.ts`
+## 2. State: `device-state.ts`
 
 **Source:** `src/features/devices/device-state.ts`
 
@@ -70,7 +70,7 @@ A pure reducer + selector module. It imports `mock-devices.ts` with an explicit 
 | `deviceAdded` | Registers a discovered device; player-owned (ownerPlayerId + personal account org), coach-org-owned otherwise. Rejects duplicates via `getDeviceAddResult`. |
 | `deviceAssigned` | Coach-only; sets `assignedPlayerId` + appends an "assigned" activity. Ignored for player. |
 | `deviceRenamed` | Trims + validates name (≤40 chars), updates name + "renamed" activity. |
-| `connectionChanged` | Sets `connectionStatus` + "connected" activity labelled "Demo connection {status} — no hardware contacted". |
+| `connectionChanged` | Sets `connectionStatus` + "connected" activity labelled `"Demo connection {status} \u2014 no hardware contacted"` (code point escaped). |
 | `deviceSynced` | Clears `pendingSessionUploads` and `sessionSlotsUsed`, sets `lastSyncedAt`, "synced" activity. |
 | `deviceUpdated` | Sets `firmwareVersion` to `availableFirmwareVersion`, "updated" activity. |
 | `deviceUnlinked` | Removes the device (unknown ids leave state unchanged). |
@@ -104,7 +104,7 @@ A pure reducer + selector module. It imports `mock-devices.ts` with an explicit 
 
 ---
 
-## 3. Types — `types.ts`
+## 3. Types: `types.ts`
 
 **Source:** `src/features/devices/types.ts`
 
@@ -126,7 +126,7 @@ A pure reducer + selector module. It imports `mock-devices.ts` with an explicit 
 
 ---
 
-## 4. Fixtures — `mock-devices.ts`
+## 4. Fixtures: `mock-devices.ts`
 
 **Source:** `src/features/devices/mock-devices.ts`
 
@@ -136,8 +136,8 @@ A pure reducer + selector module. It imports `mock-devices.ts` with an explicit 
 | `ACTIVE_PLAYER_ID` | `"p1"` |
 | `PERSONAL_ACCOUNT_ID` | `"account-personal"` |
 | `MOCK_DEVICE_PLAYERS` | 4 players: S. Mokoena (`p1`), L. Adams (`p2`), T. Nkosi (`p3`), J. Pieterse (`p4`) |
-| `FIXTURE_REGISTERED_DEVICES` | 5 devices (see below) — used only by tests |
-| `MOCK_REGISTERED_DEVICES` | `[]` (empty) — the provider starts with **no** devices |
+| `FIXTURE_REGISTERED_DEVICES` | 5 devices (see below), used only by tests |
+| `MOCK_REGISTERED_DEVICES` | `[]` (empty); the provider starts with **no** devices |
 | `MOCK_DISCOVERED_DEVICES` | 3 simulated scan results (`nearby-1`/`-2`/`-3`, signals strong/nearby/weak) |
 
 `MOCK_REGISTERED_DEVICES` is empty by design: the Hub renders its empty state ("No devices yet") until the user pairs a tracker through AddDevice. `FIXTURE_REGISTERED_DEVICES` is the deterministic sample inventory used exclusively by the node tests.
@@ -166,13 +166,13 @@ All three screens import dashboard primitives via **checkout-relative** paths (`
 
 Layout, top to bottom:
 
-1. **Firmware connection banner** — `RadioTower` + "Current SSP-S1 firmware" + "Open hardware connection" button → `onOpenFirmware` (the real Tracker flow).
+1. **Firmware connection banner**: `RadioTower` + "Current SSP-S1 firmware" + "Open hardware connection" button → `onOpenFirmware` (the real Tracker flow).
 2. `DemoModeBanner`.
-3. **Readiness summary** — "{connectedCount} of {devices.length} connected" + "{pendingUploadCount} uploads pending".
-4. **One priority action** — `selectDeviceHubPriority(state, role)` rendered as a single button with `testID="device-hub-priority-action"`. Kinds: `add` / `update` / `sync` / `review` / `busy`. Disabled when `busy` or `review`. Exactly one `testID` instance (asserted).
-5. **Active operation banner** — `activeOperation.message` with a `Spinner` while running, `accessibilityLiveRegion="polite"`.
-6. **Preview bulk states** (collapsed disclosure) — `PreviewBulkOutcome = "none" | "partial" | "failed"`. The `Add device` / `Sync all` / `Push updates` buttons inside are real (they route through `handleSyncAll`/`handlePushUpdates`, which call the provider), but the `partial`/`failed` `Alert` previews are purely cosmetic (keyed by `previewBulkRevision`); "Demo operation failed. No hardware was contacted." with Retry/Dismiss. The raw `syncAll(`/`pushUpdates(` invocations are defined above the disclosure title, so none appear after it (asserted).
-7. **Device list** — `DeviceRow` per visible device, or `EmptyState` "No devices yet" (the test explicitly forbids "Add your first device").
+3. **Readiness summary**: "{connectedCount} of {devices.length} connected" + "{pendingUploadCount} uploads pending".
+4. **One priority action**: `selectDeviceHubPriority(state, role)` rendered as a single button with `testID="device-hub-priority-action"`. Kinds: `add` / `update` / `sync` / `review` / `busy`. Disabled when `busy` or `review`. Exactly one `testID` instance (asserted).
+5. **Active operation banner**: `activeOperation.message` with a `Spinner` while running, `accessibilityLiveRegion="polite"`.
+6. **Preview bulk states** (collapsed disclosure): `PreviewBulkOutcome = "none" | "partial" | "failed"`. The `Add device` / `Sync all` / `Push updates` buttons inside are real (they route through `handleSyncAll`/`handlePushUpdates`, which call the provider), but the `partial`/`failed` `Alert` previews are cosmetic (keyed by `previewBulkRevision`); "Demo operation failed. No hardware was contacted." with Retry/Dismiss. The raw `syncAll(`/`pushUpdates(` invocations are defined above the disclosure title, so none appear after it (asserted).
+7. **Device list**: `DeviceRow` per visible device, or `EmptyState` "No devices yet" (the test explicitly forbids "Add your first device").
 
 `highlightedDeviceId` (passed from the add route via `useLocalSearchParams`) is cleared after 1800 ms via `setTimeout`/`clearTimeout`; the matched row gets `border border-primary bg-primary/10` and <code v-pre>accessibilityState=&#123;&#123; selected: true &#125;&#125;</code>.
 
@@ -192,11 +192,11 @@ Three steps ("Step {step} of 3"):
 
 | Step | Content |
 | :--- | :--- |
-| 1 — Power on | "Switch on your tracker" + a collapsible "Tracker not switching on?" troubleshoot. "Next" → step 2. |
-| 2 — Scan | "Choose a nearby tracker" + "Simulated scan" badge. `ScanState`: `scanning` (650 ms via `SCAN_DELAY_MS = 650`, then `results`) / `results` (renders `DiscoveryRow`s; already-registered rows are disabled) / `empty` / `failed` (both reachable from the "Preview scan states" disclosure). |
-| 3 — Confirm | Selected device summary + `Device name` input (validated by `validateDeviceName`) + coach: `Select` for "Assign to player (optional)" (Unassigned + roster); player: "This tracker will be registered to your account". "Add device". |
+| 1: Power on | "Switch on your tracker" + a collapsible "Tracker not switching on?" troubleshoot. "Next" → step 2. |
+| 2: Scan | "Choose a nearby tracker" + "Simulated scan" badge. `ScanState`: `scanning` (650 ms via `SCAN_DELAY_MS = 650`, then `results`) / `results` (renders `DiscoveryRow`s; already-registered rows are disabled) / `empty` / `failed` (both reachable from the "Preview scan states" disclosure). |
+| 3: Confirm | Selected device summary + `Device name` input (validated by `validateDeviceName`) + coach: `Select` for "Assign to player (optional)" (Unassigned + roster); player: "This tracker will be registered to your account". "Add device". |
 
-Exit handling: `usePreventRemove(!allowRemoval, …)` imported from **`expo-router/react-navigation`** (not `expo-router/build/`, not a manual `beforeRemove` listener — asserted). `ExitIntent = "idle" | "cancel" | "navigation" | "complete"`. Stepping back from step 3 → 2 → 1; from step 1, a dirty form opens a discard `AlertDialog` ("Discard pairing changes?", "Keep pairing" / "Discard and exit"). On success: a Toast ("Device added in Demo mode" / "Device added in Demo mode. No Bluetooth connection was made."), `announceForAccessibility`, then `onComplete(deviceId)`. Duplicate registration returns `{ ok: false, reason: "already-registered" }` and shows "Already registered. Choose another tracker before adding." **before** any toast/announcement (ordering asserted).
+Exit handling: `usePreventRemove(!allowRemoval, …)` imported from **`expo-router/react-navigation`** (not `expo-router/build/`, not a manual `beforeRemove` listener; asserted). `ExitIntent = "idle" | "cancel" | "navigation" | "complete"`. Stepping back from step 3 → 2 → 1; from step 1, a dirty form opens a discard `AlertDialog` ("Discard pairing changes?", "Keep pairing" / "Discard and exit"). On success: a Toast ("Device added in Demo mode" / "Device added in Demo mode. No Bluetooth connection was made."), `announceForAccessibility`, then `onComplete(deviceId)`. Duplicate registration returns `{ ok: false, reason: "already-registered" }` and shows "Already registered. Choose another tracker before adding." **before** any toast/announcement (ordering asserted).
 
 Route wrappers (`src/app/(coach)/device/add.tsx`, `src/app/(player)/device/add.tsx`) call `router.dismissTo({ pathname: "/(role)/device", params: { addedDeviceId: deviceId } })`; they never use `router.replace`/`router.back`/`router.canGoBack` (asserted). Detail routes (`device/[id].tsx`) normalize array `id` params and `router.dismissTo("/(role)/device")` for `onBack`/`onMissingDevice`.
 
@@ -225,19 +225,19 @@ Concurrency guards: `updatingRef` rejects a second `startUpdate` while one is in
 
 **Source:** `src/features/devices/components/DemoModeBanner.tsx`
 
-An `Alert` (no `action`, no `variant="outline"`) with `AlertIcon as={Info}` and `text-foreground`: "Demo mode — Bluetooth actions are simulated in this preview. Device inventory and actions below are simulated. Hardware connection opens the live firmware flow." Supports a `compact` variant used by Details/AddDevice.
+An `Alert` (no `action`, no `variant="outline"`) with `AlertIcon as={Info}` and `text-foreground` uses `"Demo mode \u2014 Bluetooth actions are simulated in this preview. Device inventory and actions below are simulated. Hardware connection opens the live firmware flow."` (code point escaped). It supports a `compact` variant used by Details/AddDevice.
 
 ### 6.3 `DeviceRow`
 
 **Source:** `src/features/devices/components/DeviceRow.tsx`
 
-Exactly one `<Pressable>` (`min-h-12`, `accessibilityRole="button"`) — the close/close-pressable counts are asserted to be 1 each. Wraps content in a `VStack` (no `numberOfLines`/`ellipsizeMode`/`line-clamp`/`isTruncated` — truncation is forbidden). Shows name, `DeviceStatusBadge`, model · serial, optional assignment, operation label (`Syncing`/`Updating`, `text-primary`), attention reason (`text-destructive`), and a labelled hierarchy: Battery / Pending uploads / Session capacity / Firmware / Last contact. The `accessibilityLabel` concatenates all of these (including ", newly added" when highlighted).
+Exactly one `<Pressable>` (`min-h-12`, `accessibilityRole="button"`). The close/close-pressable counts are asserted to be 1 each. Wraps content in a `VStack` (no `numberOfLines`/`ellipsizeMode`/`line-clamp`/`isTruncated`; truncation is forbidden). Shows name, `DeviceStatusBadge`, model · serial, optional assignment, operation label (`Syncing`/`Updating`, `text-primary`), attention reason (`text-destructive`), and a labelled hierarchy: Battery / Pending uploads / Session capacity / Firmware / Last contact. The `accessibilityLabel` concatenates all of these (including ", newly added" when highlighted).
 
 ### 6.4 `DeviceStatusBadge`
 
 **Source:** `src/features/devices/components/DeviceStatusBadge.tsx`
 
-Labels: Connected / Disconnected / Connecting. Connected and Connecting use `bg-primary` + `text-primary-foreground` (Connecting shows a `Spinner`); Disconnected uses `variant="outline"` + `bg-muted` + `text-muted-foreground`. An "Update available" outline badge (`text-destructive`, `CircleAlert`) appears when `hasUpdate`. Wrapper: `accessibilityRole="text"` + `accessibilityLiveRegion="polite"` (never `accessibilityRole="status"` — asserted).
+Labels: Connected / Disconnected / Connecting. Connected and Connecting use `bg-primary` + `text-primary-foreground` (Connecting shows a `Spinner`); Disconnected uses `variant="outline"` + `bg-muted` + `text-muted-foreground`. An "Update available" outline badge (`text-destructive`, `CircleAlert`) appears when `hasUpdate`. Wrapper: `accessibilityRole="text"` + `accessibilityLiveRegion="polite"` (never `accessibilityRole="status"`; asserted).
 
 ### 6.5 `SessionCapacity`
 
@@ -253,22 +253,22 @@ Both are node `--test` source-contract tests (`npm run test:legacy`).
 
 ### 7.1 `device-state.test.mjs`
 
-**Source:** `src/features/devices/device-state.test.mjs` — exhaustive reducer/selector coverage using `FIXTURE_REGISTERED_DEVICES`. Covers: coach (4 visible) vs player (2 visible) scoping; readiness states (empty/ready/attention-precedence/disconnected); seeded Demo activity disclosures; deterministic add → assign → rename → connect → sync → update → unlink; duplicate-pairing returns input state unchanged; `sessionCleared` empties everything; hub priority (`add`/`update`/`sync`/`review`/`busy`) and label plurals; `getDeviceAddResult` ok + `already-registered`; capacity/battery/warranty/name-validation boundaries; bulk selectors (`selectSyncEligibleIds = [device-1, device-3]`, `selectUpdateEligibleIds = [device-1]`); player add uses personal-account ownership; player cannot assign; assignment labels (named / "Player unavailable" / "Unassigned"); operation labels only for targeted running devices; attention reasons (critical battery / storage full); disconnect/reconnect activity newest-first with unique ids; repeated rename/assignment keeps unique activity ids.
+**Source:** `src/features/devices/device-state.test.mjs`. Exhaustive reducer/selector coverage using `FIXTURE_REGISTERED_DEVICES`. Covers: coach (4 visible) vs player (2 visible) scoping; readiness states (empty/ready/attention-precedence/disconnected); seeded Demo activity disclosures; deterministic add → assign → rename → connect → sync → update → unlink; duplicate-pairing returns input state unchanged; `sessionCleared` empties everything; hub priority (`add`/`update`/`sync`/`review`/`busy`) and label plurals; `getDeviceAddResult` ok + `already-registered`; capacity/battery/warranty/name-validation boundaries; bulk selectors (`selectSyncEligibleIds = [device-1, device-3]`, `selectUpdateEligibleIds = [device-1]`); player add uses personal-account ownership; player cannot assign; assignment labels (named / "Player unavailable" / "Unassigned"); operation labels only for targeted running devices; attention reasons (critical battery / storage full); disconnect/reconnect activity newest-first with unique ids; repeated rename/assignment keeps unique activity ids.
 
 ### 7.2 `device-ui-source.test.mjs`
 
-**Source:** `src/features/devices/device-ui-source.test.mjs` — grep-based source contracts. Covers: `forbiddenDeviceImport` regex across `src/features/devices/**` (no ble-plx/supabase/async-storage/ble-service/dfu-service) and the specifier self-test; 48dp buttons on Hub/Add/Details; accessibility props on status badge, details, row, capacity (no `accessibilityRole="status"`); `@ts-expect-error` + `.ts` extension import in `device-state.ts` and no `.ts`-extension import in `mock-devices.ts`; `DemoModeBanner` present on Hub/Add/Details; role wrappers pin `role="coach"`/`"player"` and never cross; checkout-relative imports for routes (`../../features/devices` etc., no `@/features/devices`) and dashboard (`../../components/dashboard`, no `@/`); fixture coverage (connected/disconnected, 78/20/10, slots 8/17/20, warranty dates, `availableFirmwareVersion: "v1.5.0"`, `"Unassigned Tracker"`); bulk-preview disclosure + non-mutating after-title; `DemoModeBanner` disclosure text + local `Alert` props; status-badge mapping + `gap-1` spacing (4 badges); `DeviceRow` single `Pressable` + assignment/update detail + no truncation; Hub coach assignment vs player omission; `SessionCapacity` guards; hub priority single `testID`; empty/loading truthful states (no "Add your first device"); DeviceRow label hierarchy; AddDevice three steps + `usePreventRemove` + `ExitIntent` + discard dialog + stale-action guards + public `expo-router/react-navigation` import; completion → `params: { addedDeviceId }` → Hub highlight (`bg-primary/10`, `selected`); Add/Details routes use `router.dismissTo` (no replace/back/canGoBack); Details requested info + confirmed actions + `isDisabled={busy}` ≥5 + dialogs `nativeID`/`accessibilityLabelledBy` + `initialFocusRef`; FirmwareUpdateSheet all seven steps + battery guard + progressbar + catch→failure + `dismissable = step !== "updating"` + duplicate/stale rejection + `latestCheckRef`; provider timer cancellation (`mountedRef`, `clearTimeout`, `if (!mountedRef.current)`) + coach-only assignment + `operationLocked` on unlink.
+**Source:** `src/features/devices/device-ui-source.test.mjs`. Grep-based source contracts. Covers: `forbiddenDeviceImport` regex across `src/features/devices/**` (no ble-plx/supabase/async-storage/ble-service/dfu-service) and the specifier self-test; 48dp buttons on Hub/Add/Details; accessibility props on status badge, details, row, capacity (no `accessibilityRole="status"`); `@ts-expect-error` + `.ts` extension import in `device-state.ts` and no `.ts`-extension import in `mock-devices.ts`; `DemoModeBanner` present on Hub/Add/Details; role wrappers pin `role="coach"`/`"player"` and never cross; checkout-relative imports for routes (`../../features/devices` etc., no `@/features/devices`) and dashboard (`../../components/dashboard`, no `@/`); fixture coverage (connected/disconnected, 78/20/10, slots 8/17/20, warranty dates, `availableFirmwareVersion: "v1.5.0"`, `"Unassigned Tracker"`); bulk-preview disclosure + non-mutating after-title; `DemoModeBanner` disclosure text + local `Alert` props; status-badge mapping + `gap-1` spacing (4 badges); `DeviceRow` single `Pressable` + assignment/update detail + no truncation; Hub coach assignment vs player omission; `SessionCapacity` guards; hub priority single `testID`; empty/loading truthful states (no "Add your first device"); DeviceRow label hierarchy; AddDevice three steps + `usePreventRemove` + `ExitIntent` + discard dialog + stale-action guards + public `expo-router/react-navigation` import; completion → `params: { addedDeviceId }` → Hub highlight (`bg-primary/10`, `selected`); Add/Details routes use `router.dismissTo` (no replace/back/canGoBack); Details requested info + confirmed actions + `isDisabled={busy}` ≥5 + dialogs `nativeID`/`accessibilityLabelledBy` + `initialFocusRef`; FirmwareUpdateSheet all seven steps + battery guard + progressbar + catch→failure + `dismissable = step !== "updating"` + duplicate/stale rejection + `latestCheckRef`; provider timer cancellation (`mountedRef`, `clearTimeout`, `if (!mountedRef.current)`) + coach-only assignment + `operationLocked` on unlink.
 
 ---
 
 ## 8. Where real hardware lives
 
-| Concern | Demo (this feature) | Real (Tracker feature) |
+| Concern | Demo (this feature) | Current non-Demo mobile status |
 | :--- | :--- | :--- |
-| BLE connect/scan | Simulated, 650 ms | `NativeTrackerService` — 15 s connect, real GATT |
+| BLE connect/scan | Simulated, 650 ms | `NativeTrackerService`: 15 s connect, real GATT |
 | Session record/download | `deviceSynced` clears counters | `tracker.startSession`/`downloadSession`, `protocol.ts` |
-| Firmware update | `FirmwareUpdateSheet` cosmetic 3000 ms | Backend [Firmware OTA](../backend/firmware-ota) + `/devices/:id/firmware-update` |
+| Firmware update | `FirmwareUpdateSheet` cosmetic 3000 ms | **Not implemented in mobile.** The backend exposes offer metadata, but this app has no 0x07 DFU characteristic, download/install transport, or post-reset verification. |
 | Sync to backend | None | `uploadFirmwareSession` → signed URL → `completeIngest` |
 | A-GPS assist | None | `assistGps` (expo-location) |
 
-For the real BLE lifecycle, see [Live Tracking & Sync](./tracker-and-sync) and [BLE GATT Protocol](./ble-protocol). For the server-side device/pairing/assignment/OTA contract this feature mirrors, see the backend [Devices API](../backend/routes/devices).
+For the source-implemented BLE lifecycle, see [Live Tracking & Sync](./tracker-and-sync) and [BLE GATT Protocol](./ble-protocol). For the server-side device/pairing/assignment/OTA-offer contract that is not yet consumed here, see the backend [Devices API](../backend/routes/devices).

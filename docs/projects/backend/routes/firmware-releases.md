@@ -6,7 +6,7 @@ outline: deep
 
 # Firmware Releases API (Phase 3)
 
-The Firmware Releases API is the publish surface for **SSP-S1** nRF5340 application firmware artifacts. It exposes two routes that both validate the same `publishFirmwareRelease` body via `zValidator('json', …)` and delegate to `storeFirmwareRelease(body, createdByUserId)` (see [Firmware OTA](../firmware-ota) for the full OTA pipeline and [Architecture](../architecture) for where this fits). There is no list or delete route — once published, a `firmware_releases` row is immutable; device update selection orders by `version_code` (a DB integer), **not** semver parsing.
+The Firmware Releases API stores supplied **SSP-S1** nRF5340 application artifacts and their metadata. The publisher is responsible for signing and validating the image; the gateway only validates request metadata/base64 size, rejects an empty decoded artifact, and computes SHA-256 over the uploaded bytes. Two routes delegate to `storeFirmwareRelease(body, createdByUserId)`. There is no list or delete route; once published, a `firmware_releases` row is immutable, and device update selection orders by `version_code` (a DB integer), **not** semver parsing.
 
 Sources: `src/routes/firmware-releases.ts` (JWT path) and `src/routes/internal.ts` (secret path); storage logic in `src/lib/firmware.ts`; body schema in `src/schemas/firmware.ts`.
 
@@ -16,8 +16,8 @@ Sources: `src/routes/firmware-releases.ts` (JWT path) and `src/routes/internal.t
 
 This API has **two publish paths** that run the same storage routine with different identities:
 
-- **JWT path — `POST /firmware-releases`.** Protected by the `auth` middleware (Supabase access token) and then `requireRoles('ssp_super_admin')`. The handler records `created_by_user_id = user.id` (the JWT subject), so publishes are attributable to the operator. Roles are DB-loaded on every request from `user_roles` joined to `roles(name)` with `revoked_at IS NULL` — not from JWT `app_metadata.roles` — and fail-closed to `[]` (→ 403) on a DB error (see [Auth & Security](../auth-and-security)).
-- **Shared-secret path — `POST /internal/firmware-releases`.** Mounted under `/internal`, which never applies `auth`. A per-request middleware selects `FIRMWARE_RELEASE_SECRET` (because the path ends in `/firmware-releases`) and authorizes when `!!secret && (x-cron-secret === secret || Authorization === \`Bearer ${secret}\`)`. This is the machine/CI publish path: `storeFirmwareRelease(body, null)` records `created_by_user_id: null`. If `FIRMWARE_RELEASE_SECRET` is unset, every publish attempt returns `401`.
+- **JWT path (`POST /firmware-releases`).** Protected by the `auth` middleware (Supabase access token) and then `requireRoles('ssp_super_admin')`. The handler records `created_by_user_id = user.id` (the JWT subject), so publishes are attributable to the operator. Roles are DB-loaded on every request from `user_roles` joined to `roles(name)` with `revoked_at IS NULL`, not from JWT `app_metadata.roles`, and fail-closed to `[]` (→ 403) on a DB error (see [Auth & Security](../auth-and-security)).
+- **Shared-secret path (`POST /internal/firmware-releases`).** Mounted under `/internal`, which never applies `auth`. A per-request middleware selects `FIRMWARE_RELEASE_SECRET` (because the path ends in `/firmware-releases`) and authorizes when `!!secret && (x-cron-secret === secret || Authorization === \`Bearer ${secret}\`)`. This is the machine/CI publish path: `storeFirmwareRelease(body, null)` records `created_by_user_id: null`. If `FIRMWARE_RELEASE_SECRET` is unset, every publish attempt returns `401`.
 
 Both routes validate the body with the same `zValidator('json', publishFirmwareRelease)` schema, so a validation failure returns the `@hono/zod-validator` default `400` structured body automatically.
 
@@ -30,7 +30,7 @@ Publishes a new firmware artifact for the nRF5340 application core, attributable
 - **Path:** `/firmware-releases`
 - **Method:** `POST`
 - **Auth:** JWT (Supabase access token verified by the `auth` middleware)
-- **Required Roles:** `ssp_super_admin` (via `requireRoles` — only the literal role admits; no upward cascade applies as this is the top of the hierarchy)
+- **Required Roles:** `ssp_super_admin` (via `requireRoles`: only the literal role admits; no upward cascade applies as this is the top of the hierarchy)
 - **Tenant Scope:** Cross-tenant (super-admin only; firmware releases are global, not org-scoped)
 
 ### Request Body Schema (`publishFirmwareRelease`)
@@ -42,7 +42,7 @@ Validated with `zValidator('json', publishFirmwareRelease)` in `src/schemas/firm
 | `target` | `string` | Yes | Literal `'nrf5340_app'` | Firmware target core. Only the nRF5340 application core is supported. |
 | `hardware_model` | `string` | Yes | Min 1, max 100 chars | Hardware model the artifact targets (e.g. `SSP-S1-PRO`). |
 | `hardware_revision` | `string` | No | Min 1, max 100 chars; nullable | PCB revision. Omitted/null matches devices whose `hardware_revision` is null. |
-| `version` | `string` | Yes | Regex `/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/`, max 50 chars | Human-readable version string. **Not** the ordering key — see [Versioning](#versioning) below. |
+| `version` | `string` | Yes | Regex `/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/`, max 50 chars | Human-readable version string. **Not** the ordering key; see [Versioning](#versioning) below. |
 | `version_code` | `integer` | Yes | Positive (`z.number().int().positive()`) | Monotonic DB ordering key for device update selection. |
 | `protocol_version` | `string` | Yes | Min 1, max 50 chars | Device protocol version the artifact requires. |
 | `mandatory` | `boolean` | No | Default `false` | Forces the update when offered to devices. |
@@ -113,7 +113,7 @@ Machine/CI publish path: same body and storage routine as the JWT route, but aut
 - **Path:** `/internal/firmware-releases`
 - **Method:** `POST`
 - **Auth:** `FIRMWARE_RELEASE_SECRET` (sent via the `x-cron-secret` header **or** `Authorization: Bearer <secret>`)
-- **Required Roles:** n/a — secret-gated, no role check
+- **Required Roles:** n/a (secret-gated, no role check)
 - **Tenant Scope:** Cross-tenant (global publish; no user identity recorded)
 
 The middleware selects `FIRMWARE_RELEASE_SECRET` because `c.req.path.endsWith('/firmware-releases')`. The body is validated with the same `zValidator('json', publishFirmwareRelease)` schema, then the handler calls `storeFirmwareRelease(c.req.valid('json'), null)`.
@@ -183,4 +183,4 @@ Both routes delegate to `storeFirmwareRelease(body, createdByUserId)` in `src/li
 
 ## Versioning
 
-The `version` string is **human-readable only** — it is validated for format (`/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/`, max 50) but never parsed or compared by `lib/firmware.ts`. The database ordering key for device update selection is `version_code`, a positive integer. The consumer is `GET /devices/:id/firmware-update` in the [Devices API](./devices): it finds the latest `firmware_releases` row matching the device's `target`, `hardware_model`, `protocol_version`, and `hardware_revision` (or `is('hardware_revision', null)`), ordered by `version_code desc` with `limit(1)`, then skips the release when `release.version === device.firmware_version` or `device.firmware_version_code !== null && release.version_code <= device.firmware_version_code`. Any doc claiming semver ordering is wrong; see [Firmware OTA](../firmware-ota) for the full offer/confirm flow.
+The `version` string is **human-readable only**; it is validated for format (`/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/`, max 50) but never parsed or compared by `lib/firmware.ts`. The database ordering key for device update selection is `version_code`, a positive integer. The consumer is `GET /devices/:id/firmware-update` in the [Devices API](./devices): it finds the latest `firmware_releases` row matching the device's `target`, `hardware_model`, `protocol_version`, and `hardware_revision` (or `is('hardware_revision', null)`), ordered by `version_code desc` with `limit(1)`, then skips the release when `release.version === device.firmware_version` or `device.firmware_version_code !== null && release.version_code <= device.firmware_version_code`. Any doc claiming semver ordering is wrong; see [Firmware OTA](../firmware-ota) for the full offer/confirm flow.

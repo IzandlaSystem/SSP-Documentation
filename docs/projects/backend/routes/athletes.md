@@ -12,6 +12,10 @@ The Athletes API manages athlete profile records (`athletes` table) and their sp
 
 ## 1. List Athletes (`GET /athletes`)
 
+::: danger Scope gaps
+The organisation filter is applied only when the caller has/resolves an organisation id; a coach with no primary organisation can reach an unscoped athlete query. Supplying `team_id` filters by membership in that team but does not call `hasTeamResourceAccess`, so the team id itself is not authorized.
+:::
+
 Lists athletes visible to the caller, filtered by team and/or organisation.
 
 - **Path:** `/athletes`
@@ -52,12 +56,14 @@ The select projects exactly `id, user_id, first_name, last_name, squad_number, d
 
 ## 2. Get Athlete (`GET /athletes/:id`)
 
+`organisation_admin` and `ssp_super_admin` are accepted without comparing the target athlete to the caller's organisation. The super-admin behavior is intentional; the organisation-admin behavior is a current cross-tenant source gap.
+
 Fetches a single athlete row with its sport memberships nested.
 
 - **Path:** `/athletes/:id`
 - **Method:** `GET`
 - **Auth:** JWT
-- **Required Roles:** none — manual access check
+- **Required Roles:** none (manual access check)
 - **Tenant Scope:** Self / org / shared team
 - **Path Parameters:**
   - `id` (`uuid`): Athlete ID.
@@ -112,7 +118,7 @@ Creates a new athlete record linked to an existing user account.
 - **Auth:** JWT
 - **Required Roles:** `organisation_admin`, `ssp_super_admin` (via `requireRoles`)
 - **Tenant Scope:** Cross-tenant (no org-scope insert check; the role gate plus DB constraints are authoritative)
-- **Body validation:** `zValidator('json', createAthlete)` — validation failures return `400` with the `@hono/zod-validator` structured body.
+- **Body validation:** `zValidator('json', createAthlete)`. Validation failures return `400` with the `@hono/zod-validator` structured body.
 
 ### Request Body Schema (`createAthlete`)
 
@@ -165,12 +171,14 @@ The created `athletes` row (`select *`):
 
 ## 4. Update Athlete (`PATCH /athletes/:id`)
 
+The manual admin-or-self check likewise accepts any `organisation_admin` without a target-organisation comparison.
+
 Updates profile fields on an existing athlete record.
 
 - **Path:** `/athletes/:id`
 - **Method:** `PATCH`
 - **Auth:** JWT
-- **Required Roles:** none — manual access check (self or admin)
+- **Required Roles:** none (manual access check: self or admin)
 - **Tenant Scope:** Self / org
 - **Path Parameters:**
   - `id` (`uuid`): Athlete ID.
@@ -227,7 +235,7 @@ The updated `athletes` row (`select *`):
 
 ## Related
 
-- [Teams & Rosters API](./teams) — enrolls athletes into squads (`team_memberships`) and lists rosters.
-- [Metrics & Targets API](./metrics) — per-session `session_athlete_metrics` and `session_targets`.
-- [Workload API](./workload) — `workload_readiness` trend for an athlete.
+- [Teams & Rosters API](./teams): enrolls athletes into squads (`team_memberships`) and lists rosters.
+- [Metrics & Targets API](./metrics): per-session `session_athlete_metrics` and `session_targets`.
+- [Workload API](./workload): `workload_readiness` trend for an athlete.
 - [Architecture](../architecture) and [Auth & Security](../auth-and-security) for the JWT middleware and role cascade.

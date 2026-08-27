@@ -19,6 +19,10 @@ Source: `src/routes/benchmarks.ts`.
 
 ## 1. List Benchmarks (`GET /benchmarks`)
 
+::: danger Missing-primary-org behavior
+The handler adds an organisation filter only when a non-super-admin caller has a primary organisation. Without one, a role-authorized caller reaches an unscoped benchmark query; `team_id` is only a filter and is not separately authorized.
+:::
+
 Returns benchmark rows for the caller's tenant. Non-super-admins are scoped to
 their `primaryOrganisationId`; `ssp_super_admin` callers with no organisation
 filter read across all tenants. Optional equality filters narrow the result set
@@ -29,7 +33,7 @@ on `sport_id`, `team_id`, and `position_label`.
 - **Auth:** JWT
 - **Required Roles:** `coach`, `organisation_admin`, `ssp_super_admin`
   (admitted via `requireRoles` cascade; `sub_coach` is **not** admitted)
-- **Tenant Scope:** Org — `eq('organisation_id', ctx.primaryOrganisationId)`
+- **Tenant Scope:** Org (`eq('organisation_id', ctx.primaryOrganisationId)`)
   unless the caller is `ssp_super_admin`
 - **Query Parameters:**
   - `sport_id` (`uuid`, optional): Equality filter on `benchmarks.sport_id`.
@@ -38,7 +42,7 @@ on `sport_id`, `team_id`, and `position_label`.
     `benchmarks.position_label` (e.g. `"Flyhalf"`, `"Winger"`).
 
 Query strings are read manually via `c.req.query(...)` and applied only when
-truthy — no `zValidator('query', …)` is registered.
+truthy; no `zValidator('query', …)` is registered.
 
 ### Response (`200 OK`)
 

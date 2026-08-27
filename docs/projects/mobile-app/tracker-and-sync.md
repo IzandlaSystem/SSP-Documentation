@@ -21,7 +21,7 @@ flowchart LR
     Factory -->|"native + BleClientManager"| Native["NativeTrackerService<br/>react-native-ble-plx"]
     Factory -->|"Expo Go / no native module"| Fallback["FallbackTrackerService<br/>throws on every op"]
     Factory -->|"web"| Web["WebTrackerService<br/>throws on every op"]
-    Native -->|"GATT 0x02-0x08"| SSP["SSP-S1 Tracker<br/>(BLE)"]
+    Native -->|"GATT 0x02–0x06, 0x08"| SSP["SSP-S1 Tracker<br/>(BLE)"]
     UI -->|"api.startSession / stopSession"| API["SSP-API Gateway"]
     UI -->|"uploadFirmwareSession"| Sync["sync.ts"]
     Sync -->|"createIngestUrl → PUT signed URL<br/>→ completeIngest"| Storage["Supabase Storage<br/>(via gateway)"]
@@ -33,6 +33,8 @@ flowchart LR
 > `FallbackTrackerService` and every tracker operation throws. Web builds get a
 > dedicated `WebTrackerService` stub that throws the same way. See
 > [Configuration & Build](./configuration) for the build modes.
+
+> **Evidence boundary.** The service, parser, sync, and UI contracts are source- and unit-test verified. This audit did not establish a BLE connection, confirm the exact firmware revision, upload to a live backend, or validate a post-reset device. Treat those as runtime gates, not implied outcomes of the passing source tests.
 
 ---
 
@@ -55,35 +57,38 @@ Source: `src/features/tracker/tracker-service.types.ts`,
 
 ### `NativeTrackerService`
 
-`tracker-service.ts` — the real implementation, backed by
+`tracker-service.ts` is the real implementation, backed by
 `react-native-ble-plx`.
 
-- **BleManager singleton** — lazily constructed (`new BleManager()`), reused
-  across scans/connects, and destroyed in `destroy()`.
-- **Scan** — `startScan` requests Android permissions (BLUETOOTH_SCAN/CONNECT
+- **Per-service BleManager**: each `NativeTrackerService` lazily constructs one
+  manager (`new BleManager()`), reuses it across that service's scans/connects,
+  and destroys it in `destroy()`.
+- **Scan**: `startScan` requests Android permissions (BLUETOOTH_SCAN/CONNECT
   on API ≥ 31, else ACCESS_FINE_LOCATION), verifies Bluetooth is `PoweredOn`,
   then filters for `device.name ?? device.localName` equal to `TRACKER_NAME`
   (`"SportTracker"`).
-- **Connect** — `manager.connectToDevice(deviceId, { timeout: 15_000 })`, then
+- **Connect**: `manager.connectToDevice(deviceId, { timeout: 15_000 })`, then
   `discoverAllServicesAndCharacteristics`, then on Android
   `device.requestMTU(65)`. After connect it reads the STATUS characteristic
   once and subscribes to the four notify characteristics.
-- **Subscriptions** — on connect the service subscribes to `0x02` STATUS,
+- **Subscriptions**: on connect the service subscribes to `0x02` STATUS,
   `0x08` LIVE_DATA, `0x03` SESSION_LIST, and `0x05` SESSION_DATA, and registers a
   `manager.onDeviceDisconnected` handler (`disconnectSubscription`) that tears
-  down the connection and fails any in-flight operation.
-- **Sequential operations** — one list, one download, and one reference request
+  down the connection and fails any in-flight operation. The 0x05 handler also
+  recognizes subtype `0x20` as the acknowledgement for a reference-location
+  request written to 0x06.
+- **Sequential operations**: one list, one download, and one reference request
   may run at a time. Each occupies a single slot (`listOperation`,
   `downloadOperation`, `referenceOperation`); starting a second of the same
   kind throws (e.g. `"A session download is already running."`).
-- **Status confirmation** — `startSession`/`stopSession` write a control byte
+- **Status confirmation**: `startSession`/`stopSession` write a control byte
   then `waitForStatus(predicate)` resolves once a matching STATUS notify
   arrives (or rejects on timeout).
 
 #### Real timeouts
 
-The timeouts below are the values actually in `tracker-service.ts`. There is
-no "5 s / 6 s" convention — that prose only appears in the stale `CLAUDE.md`.
+The timeouts below match `tracker-service.ts`. There is
+no "5 s / 6 s" convention; that prose only appears in the stale `CLAUDE.md`.
 
 | Operation | Timeout | Where |
 | :--- | :--- | :--- |
@@ -108,13 +113,13 @@ flowchart TD
     Try -->|"ok"| Native["NativeTrackerService"]
 ```
 
-- **`FallbackTrackerService`** — every method throws with a fixed reason
+- **`FallbackTrackerService`**: every method throws with a fixed reason
   (`"Bluetooth tracker access is only available in a native development build
   (not Expo Go)."` by default, or the `BleManager` init error). `stopScan`,
   `disconnect`, and `destroy` are no-ops. Used when `Platform.OS !== "web"` **and**
   `!NativeModules.BleClientManager`, or when constructing
   `NativeTrackerService` throws.
-- **`WebTrackerService`** (`tracker-service.web.ts`) — a separate stub for web
+- **`WebTrackerService`** (`tracker-service.web.ts`): a separate stub for web
   builds. Every operation throws `"Bluetooth tracker access is only available in
   an iOS or Android development build."`; `stopScan`, `disconnect`, and
   `destroy` are no-ops. This is the file Metro selects on web; it is not a
@@ -185,7 +190,7 @@ sequenceDiagram
 
     Screen->>Sync: uploadFirmwareSession(backendId, fwId, session)
     Sync->>Sync: toTelemetryEnvelope(session, { backendSessionId, firmwareSessionId })
-    Note over Sync: refuses unixEpochSeconds === 0 (no GPS anchor)<br/>refuses > 100k points
+    Note over Sync: refuses unixEpochSeconds === 0 (no GPS anchor)<br/>refuses > 100k stored records
     Sync->>API: POST /sessions/:id/ingest-url { format:"json", compression:"none" }
     API-->>Sync: { signed_url, sync_id, ... }
     Sync->>Storage: HTTP PUT signed_url (JSON body, no Bearer)
@@ -197,20 +202,21 @@ sequenceDiagram
 
 The three steps map onto the backend's [Ingestion Pipeline](../backend/ingestion-pipeline):
 
-1. **`createIngestUrl(backendSessionId, { format: "json", compression: "none" })`**
-   — mints a presigned upload URL and inserts a `pending` `sync_records` row.
+1. **`createIngestUrl(backendSessionId, { format: "json", compression: "none" })`**:
+   mints a presigned upload URL and inserts a `pending` `sync_records` row.
    The mobile app uploads **uncompressed JSON** (`compression: "none"`), unlike
    the backend's gzip default.
-2. **`uploadToSignedUrl(signed_url, body, "application/json")`** — PUTs the JSON
+2. **`uploadToSignedUrl(signed_url, body, "application/json")`**: PUTs the JSON
    envelope straight to Supabase Storage. The signed URL carries its own token;
    **no Bearer header** is sent (see [API Client](./api-client)).
-3. **`completeIngest(backendSessionId, { sync_id, size_bytes, point_count })`**
-   — flips the sync row to `in_progress` and the session to `syncing`, which
+3. **`completeIngest(backendSessionId, { sync_id, size_bytes, point_count })`**:
+   flips the sync row to `in_progress` and the session to `syncing`, which
    the backend's CRON parser later picks up to decode, aggregate, and persist.
 
 `toTelemetryEnvelope` (in `protocol.ts`) does the conversion. It refuses a
 session with `unixEpochSeconds === 0` (no GPS/UTC anchor) **even if it is empty**,
-so an invalid file can never be marked synced, and caps at 100,000 points. IMU
+so an invalid file can never be marked synced, and rejects more than 100,000
+stored records before filtering invalid GNSS records. IMU
 records become points with `accel_magnitude` (mg → m/s² via `* 0.00980665`);
 GNSS records become points with `lat`/`lng`/`speed_mps` only when `valid`.
 Timestamps are reconstructed from the session's `unixEpochSeconds` anchor plus
@@ -229,7 +235,7 @@ Source: `src/features/tracker/FirmwareTrackerScreen.tsx`. Mounted at
 [Architecture](./architecture)).
 
 The screen is the one place where BLE hardware, the tracker provider, and the
-backend API meet. It is **motion-free** — there is no `Motion.*`, `Animated.*`,
+backend API meet. It is **motion-free**: there is no `Motion.*`, `Animated.*`,
 `withRepeat`, or `withTiming` anywhere in the file (enforced by
 `tracker-ui-source.test.mjs`).
 
@@ -268,8 +274,8 @@ verified by `tracker-ui-source.test.mjs`):
 | `Ready` | `tracker.connectedDevice` is set |
 | `Offline` | none of the above (no device) |
 
-When recording, the label is preceded by a small live mark — a
-<code v-pre>&lt;Box style=&#123;&#123; backgroundColor: "#FF0000" &#125;&#125; accessible=&#123;false&#125; /&gt;</code> — plus a
+When recording, the label is preceded by a small live mark:
+<code v-pre>&lt;Box style=&#123;&#123; backgroundColor: "#FF0000" &#125;&#125; accessible=&#123;false&#125; /&gt;</code>, plus a
 `Square` icon in `text-destructive`. The exact brand red (`#FF0000`) is used
 **only on this non-text dot**; the test suite explicitly forbids
 `text-[#FF0000]` and `color: "#FF0000"` so red is never applied to text (see
@@ -279,8 +285,8 @@ When recording, the label is preceded by a small live mark — a
 
 While connected, the screen renders the latest `liveSample`:
 
-- **GNSS** — `GPS fix` / `No GPS fix`, satellite count, and speed in m/s.
-- **IMU** — acceleration magnitude `Math.hypot(x, y, z)` in mg.
+- **GNSS**: `GPS fix` / `No GPS fix`, satellite count, and speed in m/s.
+- **IMU**: acceleration magnitude `Math.hypot(x, y, z)` in mg.
 
 It also shows elapsed time (`formatElapsed`, `HH:MM:SS`, resetting to
 `00:00:00` and clearing `recordingStartedAt` when the connection or recording
@@ -291,8 +297,8 @@ drops) and connection quality (`connectionQuality`: Strong ≥ −60 dBm, Fair �
 
 Below the live section, a "Stored firmware sessions" list lets the user
 refresh (`tracker.listSessions`), download each session
-(`tracker.downloadSession`), and — once downloaded and matched to an API
-session — upload it. The Upload button is disabled when there is no matching API
+(`tracker.downloadSession`) and upload it once downloaded and matched to an API
+session. The Upload button is disabled when there is no matching API
 session ("No matching API session") or when the downloaded session has no
 GPS/UTC anchor (`unixEpochSeconds === 0`, "GPS/UTC time required").
 
@@ -313,14 +319,14 @@ The tracker feature has three test files, split across the two runners (see
 
 ## Cross-references
 
-- [BLE GATT Protocol](./ble-protocol) — characteristic table, parsers/builders,
+- [BLE GATT Protocol](./ble-protocol): characteristic table, parsers/builders,
   and the implemented-vs-spec divergences (download `0x11` u16, no `0x03`
   DELETE, no `0x07` DFU, 15-byte list entries).
-- [API Client](./api-client) — the hand-rolled `fetch` client
+- [API Client](./api-client): the hand-rolled `fetch` client
   (`createIngestUrl`, `uploadToSignedUrl` with no Bearer, `completeIngest`,
   `startSession`, `stopSession`, `listSessions`).
-- [Backend: Ingestion Pipeline](../backend/ingestion-pipeline) — the gateway
+- [Backend: Ingestion Pipeline](../backend/ingestion-pipeline): the gateway
   side of the three-step upload (presigned URL, direct-to-storage PUT, async
   parse worker).
-- [Configuration & Build](./configuration) — why BLE needs a development build
+- [Configuration & Build](./configuration): why BLE needs a development build
   and how Expo Go falls back.

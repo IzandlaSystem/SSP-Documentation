@@ -24,7 +24,7 @@ with no organisation filter receive every team across all organisations.
 - **Path:** `/teams`
 - **Method:** `GET`
 - **Auth:** JWT
-- **Required Roles:** none — any authenticated user
+- **Required Roles:** none (any authenticated user)
 - **Tenant Scope:** Org (caller's primary org) / Cross-tenant for `ssp_super_admin`
 - **Query Parameters:**
   - `organisation_id` (`uuid`, optional): Filter to a specific organisation. Defaults
@@ -33,6 +33,10 @@ with no organisation filter receive every team across all organisations.
 
 When `organisation_id` is resolved, the query filters `eq('organisation_id', …)`.
 Super admins that omit the parameter receive all teams unfiltered.
+
+::: danger Missing-primary-org behavior
+A non-super-admin caller with no `primaryOrganisationId` who omits `organisation_id` also reaches the unfiltered query. This is a confirmed source-level tenant-scope gap, not an intended cross-tenant permission.
+:::
 
 ### Response (`200 OK`)
 
@@ -67,8 +71,8 @@ before the access check runs.
 - **Path:** `/teams/:id`
 - **Method:** `GET`
 - **Auth:** JWT
-- **Required Roles:** none — manual access check via `hasTeamResourceAccess`
-  (passes for `ssp_super_admin`, `organisation_admin` of the team's organisation,
+- **Required Roles:** none (manual access check via `hasTeamResourceAccess`;
+  passes for `ssp_super_admin`, `organisation_admin` of the team's organisation,
   or any caller whose `ctx.teamIds` contains `:id`)
 - **Tenant Scope:** Team
 - **Path Parameters:**
@@ -98,14 +102,14 @@ before the access check runs.
 
 ## 3. Get Team Roster (`GET /teams/:id/roster`)
 
-Returns the active roster — every `team_memberships` row for the team with
+Returns the active roster: every `team_memberships` row for the team with
 `left_at IS NULL`, each nested with its full `athletes(*)` and `coaches(*)`
 profile. Gated by `hasTeamResourceAccess` before any roster data is read.
 
 - **Path:** `/teams/:id/roster`
 - **Method:** `GET`
 - **Auth:** JWT
-- **Required Roles:** none — manual access check via `hasTeamResourceAccess`
+- **Required Roles:** none (manual access check via `hasTeamResourceAccess`)
 - **Tenant Scope:** Team
 - **Path Parameters:**
   - `id` (`uuid`, required): Team ID.

@@ -6,7 +6,7 @@ outline: deep
 
 # Mobile App Configuration & Build
 
-The **SSP-Mobile-App** is an [Expo SDK 56](https://docs.expo.dev/versions/v56/) / React Native 0.85.3 project. Its build configuration is split across four layers: Expo app metadata (`app.json`), EAS build/submit profiles (`eas.json`), build-time environment variables (`.env.example`), and the JS/TS toolchain (`tsconfig.json`, `babel.config.js`, `metro.config.js`, `postcss.config.mjs`). This page documents each one against the actual working tree. It does **not** cover `.env.local` — that file is local-only and out of scope.
+The **SSP-Mobile-App** is an [Expo SDK 56](https://docs.expo.dev/versions/v56/) / React Native 0.85.3 project. Its build configuration is split across four layers: Expo app metadata (`app.json`), EAS build/submit profiles (`eas.json`), build-time environment variables (`.env.example`), and the JS/TS toolchain (`tsconfig.json`, `babel.config.js`, `metro.config.js`, `postcss.config.mjs`). This page documents each one against the actual working tree. It does **not** cover `.env.local`; that file is local-only and out of scope.
 
 For the broader stack and how configuration feeds the running app, see [Architecture](./architecture); for the design tokens (colors, fonts, radii) that this toolchain compiles, see [Design System](./design-system).
 
@@ -38,7 +38,7 @@ flowchart LR
 
 ---
 
-## `app.json` — Expo app metadata
+## `app.json`: Expo app metadata
 
 Source: `app.json`.
 
@@ -59,13 +59,13 @@ Source: `app.json`.
 
 ### Icon & adaptive icon
 
-The app icon and the Android adaptive-icon foreground are both `./assets/brand/ssp-mark.png` — the same brand mark pinned by `src/components/dashboard/brand-contract.test.mjs` (sha256 `285d48c68c00ec1060f4cc0c0cd0c4694bada2522766c0ccb9c4eec9995bd3f5`). The Android adaptive icon background is `#000000`. The mark must be used with preserved proportions — no stretch, rotate, recolor, crop, or effects. See [Design System](./design-system).
+The app icon and the Android adaptive-icon foreground are both `./assets/brand/ssp-mark.png`, the same brand mark pinned by `src/components/dashboard/brand-contract.test.mjs` (sha256 `285d48c68c00ec1060f4cc0c0cd0c4694bada2522766c0ccb9c4eec9995bd3f5`). The Android adaptive icon background is `#000000`. The mark must be used with preserved proportions: no stretch, rotate, recolor, crop, or effects. See [Design System](./design-system).
 
 ### Plugins and native permissions
 
 | Plugin | Config | Permission strings declared |
 | :--- | :--- | :--- |
-| `expo-router` | (none) | — |
+| `expo-router` | (none) | (none) |
 | `react-native-ble-plx` | `{ isBackgroundEnabled: false, modes: ["central"], bluetoothAlwaysPermission: "Allow SSP Mobile App to connect to your SSP tracker." }` | iOS Bluetooth usage description |
 | `expo-location` | `{ locationWhenInUsePermission: "Allow SSP Mobile App to use your location to help the tracker acquire GPS faster." }` | iOS location usage description |
 
@@ -73,7 +73,7 @@ The app icon and the Android adaptive-icon foreground are both `./assets/brand/s
 
 ### Android permissions
 
-Android declares **11 permission entries** — six Bluetooth/location permissions as short aliases, plus five of them repeated in the fully-qualified `android.permission.*` form:
+Android declares **11 permission entries**: six Bluetooth/location permissions as short aliases, plus five of them repeated in the fully-qualified `android.permission.*` form:
 
 | Permission | Short form | `android.permission.*` form |
 | :--- | :---: | :---: |
@@ -84,11 +84,11 @@ Android declares **11 permission entries** — six Bluetooth/location permission
 | Fine location | `ACCESS_FINE_LOCATION` | `android.permission.ACCESS_FINE_LOCATION` |
 | Coarse location | `ACCESS_COARSE_LOCATION` | `android.permission.ACCESS_COARSE_LOCATION` |
 
-Note that `BLUETOOTH_SCAN` is declared **only** in its short form — the `android.permission.BLUETOOTH_SCAN` qualified form is absent from the array. The duplicated forms cover both the legacy `BLUETOOTH_*` short names and the qualified names some Android toolchains require. The iOS `bundleIdentifier` is `com.izandla.sspmobileapp`; the Android `package` is `com.izandla.sspmobileapp` with `versionCode: 1`.
+`BLUETOOTH_SCAN` is declared **only** in its short form; the `android.permission.BLUETOOTH_SCAN` qualified form is absent from the array. The duplicated forms cover both the legacy `BLUETOOTH_*` short names and the qualified names some Android toolchains require. The iOS `bundleIdentifier` is `com.izandla.sspmobileapp`; the Android `package` is `com.izandla.sspmobileapp` with `versionCode: 1`.
 
 ---
 
-## `eas.json` — Build & submit profiles
+## `eas.json`: Build & submit profiles
 
 Source: `eas.json`.
 
@@ -96,14 +96,14 @@ The CLI is pinned to `>= 14.0.0` and reads app versions from the remote EAS proj
 
 | Profile | `developmentClient` | `distribution` | Android `buildType` | `autoIncrement` | Use |
 | :--- | :---: | :--- | :--- | :--- | :--- |
-| `development` | `true` | `internal` | (default) | — | Dev client for `npx expo run:ios`/`run:android`; BLE works |
-| `preview` | — | `internal` | `apk` | — | Shareable APK for QA |
-| `production` | — | (default) | `app-bundle` | `true` | Store-ready AAB; version auto-bumped on Android |
+| `development` | `true` | `internal` | (default) | None | Internal development-client profile for `eas build --profile development`; BLE-capable after install |
+| `preview` | None | `internal` | `apk` | None | Shareable APK for QA |
+| `production` | None | (default) | `app-bundle` | `true` | Production profile; Android outputs an AAB, and auto-increment is profile-wide |
 
-The `submit.production` block targets the Android `internal` track, so production Android builds submit to Google Play's internal testing lane by default. iOS submission is not configured in `eas.json`.
+The `submit.production` block targets the Android `internal` track, so production Android builds submit to Google Play's internal testing lane by default. iOS submission is not configured in `eas.json`. `package.json` does not currently list `expo-dev-client`, so the EAS `developmentClient: true` profile has not been validated as a launcher-enabled development client by this source audit; local `expo run:*` commands still produce native development builds.
 
 ```bash
-# Build a dev client (required for BLE — see below)
+# Build a dev client (required for BLE: see below)
 eas build --profile development --platform ios
 eas build --profile development --platform android
 
@@ -118,20 +118,20 @@ eas build --profile production --platform android --auto-submit
 
 ## Environment variables
 
-Source: `.env.example` (the **only** env file read for this doc — do not document `.env.local`).
+Source: `.env.example` as the committed template, plus the static `process.env.EXPO_PUBLIC_*` references in source. Local `.env*` values are intentionally not reproduced here.
 
 | Variable | `.env.example` default | Used by | Notes |
 | :--- | :--- | :--- | :--- |
 | `EXPO_PUBLIC_SUPABASE_URL` | `https://your-project.supabase.co` | `src/lib/supabase.ts` | Supabase project URL. `supabase.ts` throws if missing. |
 | `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_your_key` | `src/lib/supabase.ts` | Supabase publishable (anon) key. Falls back to `EXPO_PUBLIC_SUPABASE_ANON_KEY` if unset. |
 | `EXPO_PUBLIC_API_URL` | `https://ssp-api-rosy.vercel.app` | `src/lib/api.ts` | Backend gateway base URL; also hard-coded as the in-code default. See [API Client](./api-client). |
-| `EXPO_PUBLIC_FORCE_ONBOARDING` | `false` | `src/app/index.tsx` | Dev-only: set to `true` (or any truthy string) to force the onboarding carousel on every launch. Leave unset/false in production. |
+| `EXPO_PUBLIC_FORCE_ONBOARDING` | `false` | `src/app/index.tsx` | Dev-only: the code requires the exact string `"true"` to force the onboarding carousel. Leave unset/false in production. |
 
-### Important: all `EXPO_PUBLIC_*` are read at build time
+### Important: all `EXPO_PUBLIC_*` values are public and inlined into the JS bundle
 
-Expo inlines `EXPO_PUBLIC_*` variables into the JS bundle at **build** time, not at runtime. Changing a value requires a rebuild (`eas build` or `npx expo run:ios`/`run:android`); it does **not** pick up from a `.env.local` on an already-installed build. This is why `.env.example` is the canonical source of record — it is the contract the build consumes.
+Expo CLI statically replaces these references while bundling JavaScript. In local development, edit the env value and perform a full reload of the development build; a native rebuild is only required when native code/config changes. Production binaries or immutable updates must be rebuilt/re-exported to embed changed values. `EXPO_PUBLIC_*` values are visible in the compiled app, so they must never contain secrets. `.env.example` is a committed template, not a runtime file and not proof of the values used by a deployed build.
 
-### `EXPO_PUBLIC_FORCE_DASHBOARD` — referenced in code, not in `.env.example`
+### `EXPO_PUBLIC_FORCE_DASHBOARD`: referenced in code, not in `.env.example`
 
 `src/app/index.tsx` reads `process.env.EXPO_PUBLIC_FORCE_DASHBOARD` to short-circuit the entry gate straight to `/(coach)/(tabs)/home` (used for fast dashboard iteration during development). **This variable is NOT listed in `.env.example`.** Developers who need it must add it to their local `.env.local` manually; it is a dev convenience and should never be set in a shipping build. The entry gate is documented in [Auth & Onboarding](./auth-and-onboarding).
 
@@ -147,7 +147,7 @@ Source: `.npmrc`, `package.json`.
 legacy-peer-deps=true
 ```
 
-This keeps npm from rejecting the peer-dependency graph around Expo SDK 56, React Native 0.85.3, and the NativeWind/Tailwind v4 preview. Removing it will break `npm install`. Keep it.
+This tells npm to use legacy peer-dependency resolution for this repository. The file does not record why it was introduced; do not remove it without verifying a clean install and the mobile checks.
 
 `package.json` pins `lightningcss` to `1.30.1` in **both** `overrides` and `resolutions`:
 
@@ -156,11 +156,11 @@ This keeps npm from rejecting the peer-dependency graph around Expo SDK 56, Reac
 "resolutions": { "lightningcss": "1.30.1" }
 ```
 
-The pin exists because NativeWind v5 / Tailwind v4's PostCSS pipeline depends on a `lightningcss` version whose newer releases have broken native module compatibility with the Expo/Metro build. Both fields are present so the pin holds under npm (`overrides`) and any tooling that resolves through Yarn-style `resolutions`. Do not bump `lightningcss` without rebuilding the dev client and confirming NativeWind still compiles `global.css`.
+Both fields pin the dependency under npm (`overrides`) and tooling that honors Yarn-style `resolutions`. The configuration does not document the original failure that required the pin, so avoid inventing one; verify a clean install and NativeWind compilation before changing it.
 
 ---
 
-## `tsconfig.json` — TypeScript config
+## `tsconfig.json`: TypeScript config
 
 Source: `tsconfig.json`.
 
@@ -189,11 +189,11 @@ Source: `babel.config.js`.
 | Piece | What it does |
 | :--- | :--- |
 | `babel-preset-expo` | Base Expo preset (React Native + JSX transform). |
-| `module-resolver` plugin | Alias `@/` → `./` so Babel-resolved imports match the TS `@/*` alias. Note: the alias root is `./`, so `@/lib/api` and `@/components/ui/...` both resolve relative to the repo root. |
+| `module-resolver` plugin | Alias `@/` → `./` so Babel-resolved imports match the TS `@/*` alias. The alias root is `./`, so `@/lib/api` and `@/components/ui/...` both resolve relative to the repo root. |
 | `react-native-worklets/plugin` | Registers the worklets transform for Reanimated/worklets on native. |
 | `nativewind/babel` override | Applied to **every** file **except** `node_modules/react-native-web/**`. The `exclude` predicate returns `true` for react-native-web paths so NativeWind does not inject its web-only handling there. |
 
-`api.cache(true)` enables Babel's persistent cache — safe because the config is deterministic.
+`api.cache(true)` enables Babel's persistent cache, which is safe because the config is deterministic.
 
 ### `metro.config.js`
 
@@ -217,13 +217,13 @@ Source: `postcss.config.mjs`.
 export default { plugins: { '@tailwindcss/postcss': {} } };
 ```
 
-Only `@tailwindcss/postcss` is registered — no `autoprefixer`, no `postcss-preset-env`. Tailwind v4 handles its own prefixing via `lightningcss` (pinned above). `global.css` holds the Tailwind v4 theme tokens as RGB triples; see [Design System](./design-system) for the light/dark token tables.
+Only `@tailwindcss/postcss` is registered: no `autoprefixer`, no `postcss-preset-env`. Tailwind v4 handles its own prefixing via `lightningcss` (pinned above). `global.css` holds the Tailwind v4 theme tokens as RGB triples; see [Design System](./design-system) for the light/dark token tables.
 
 ---
 
 ## BLE requires a development build
 
-`react-native-ble-plx` is a native module. Its `BleClientManager` native class is **not present in Expo Go**, so on a Go client `NativeModules.BleClientManager` is `undefined` and `createTrackerService` falls back to `FallbackTrackerService` — which returns simulated/demo data and never contacts real hardware.
+`react-native-ble-plx` is a native module. Its `BleClientManager` native class is **not present in Expo Go**, so on a Go client `NativeModules.BleClientManager` is `undefined` and `createTrackerService` falls back to `FallbackTrackerService`. That fallback does **not** simulate tracker data: scan/connect report an error and throw, tracker operations throw, and stop/disconnect/destroy are no-ops.
 
 | Target | `NativeModules.BleClientManager` | `createTrackerService` returns | Real BLE? |
 | :--- | :---: | :--- | :--- |
@@ -232,7 +232,7 @@ Only `@tailwindcss/postcss` is registered — no `autoprefixer`, no `postcss-pre
 | Expo Go | `undefined` | `FallbackTrackerService` | No |
 | Web | `undefined` | `WebTrackerService` (throws) | No |
 
-For any work that touches the SSP-S1 tracker — live tracking, session download, A-GPS assist, firmware session upload — use a **development build**, not Expo Go. `npx expo start` (no `--dev-client`) is fine for web-only / non-BLE UI iteration. See [Tracker & Sync](./tracker-and-sync) for the `TrackerService` interface and the fallback behavior.
+For any work that touches the SSP-S1 tracker (live tracking, session download, A-GPS assist, firmware session upload), use a **development build**, not Expo Go. `npx expo start` (no `--dev-client`) is fine for web-only / non-BLE UI iteration. See [Tracker & Sync](./tracker-and-sync) for the `TrackerService` interface and the fallback behavior.
 
 ---
 
@@ -243,11 +243,11 @@ Source: `package.json` `scripts`.
 | Command | Script | Purpose |
 | :--- | :--- | :--- |
 | `npm run start` | `expo start` | Start the Metro dev server. Use `--dev-client` to open a connected dev build (BLE). Plain `expo start` opens Expo Go / web. |
-| `npm run ios` | `expo run:ios` | Build and launch the iOS **development client** (BLE works). |
-| `npm run android` | `expo run:android` | Build and launch the Android **development client** (BLE works). |
+| `npm run ios` | `expo run:ios` | Build and launch an iOS **native development build** (BLE module included). |
+| `npm run android` | `expo run:android` | Build and launch an Android **native development build** (BLE module included). |
 | `npm run web` | `expo start --web` | Start the web target. BLE unsupported; `WebTrackerService` throws. |
 | `npm run lint` | `expo lint` | ESLint (`eslint-config-expo`). |
-| `npm test` | `vitest run && npm run test:legacy` | Run both test runners — vitest (`.test.ts`) then node:test (`.test.mjs`). |
+| `npm test` | `vitest run && npm run test:legacy` | Run both test runners: vitest (`.test.ts`) then node:test (`.test.mjs`). |
 | `npm run test:legacy` | `node --test $(find src -name '*.test.mjs' -print)` | Source-contract / behavioral tests only (the `.test.mjs` set). |
 | `npx tsc --noEmit` | (not a script) | Typecheck against `tsconfig.json` with strict mode. |
 
@@ -257,9 +257,9 @@ Source: `package.json` `scripts`.
 
 ## Cross-references
 
-- [Architecture](./architecture) — app shell, provider hierarchy, route tree.
-- [Design System](./design-system) — `global.css` tokens, `SEMANTIC_COLORS`, gluestack-ui provider.
-- [Tracker & Sync](./tracker-and-sync) — BLE service, the `FallbackTrackerService` fallback, real timeouts.
-- [Testing](./testing) — the dual test runner and what `.test.mjs` enforces.
-- [API Client](./api-client) — where `EXPO_PUBLIC_API_URL` is consumed.
-- [Backend Architecture](../backend/architecture) — the gateway the mobile app calls.
+- [Architecture](./architecture): app shell, provider hierarchy, route tree.
+- [Design System](./design-system): `global.css` tokens, `SEMANTIC_COLORS`, gluestack-ui provider.
+- [Tracker & Sync](./tracker-and-sync): BLE service, the `FallbackTrackerService` fallback, real timeouts.
+- [Testing](./testing): the dual test runner and what `.test.mjs` enforces.
+- [API Client](./api-client): where `EXPO_PUBLIC_API_URL` is consumed.
+- [Backend Architecture](../backend/architecture): the gateway the mobile app calls.

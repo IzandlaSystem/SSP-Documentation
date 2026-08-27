@@ -6,7 +6,7 @@ outline: deep
 
 # Mobile App Architecture & Navigation
 
-The **SSP-Mobile-App** is an Expo (React Native) companion app for SSP-S1 trackers, serving coaches and athletes with equal priority. Its navigation layer is built on **Expo Router** with file-based routing and `experiments.typedRoutes` enabled, split into two role-scoped route groups — `(coach)` and `(player)` — each gated by a role guard and each presenting its own native tab bar. This page documents the shell, the route tree, the entry-gate decision flow, and the navigation conventions the app enforces. Screen *content* (what each dashboard, device, or tracker screen renders) lives in the sibling docs cross-linked at the bottom.
+The **SSP-Mobile-App** is an Expo (React Native) companion app for SSP-S1 trackers, serving coaches and athletes with equal priority. Its navigation layer is built on **Expo Router** with file-based routing and `experiments.typedRoutes` enabled, split into two role-scoped route groups, `(coach)` and `(player)`, each gated by a role guard and each presenting its own native tab bar. This page documents the shell, the route tree, the entry-gate decision flow, and the navigation conventions the app enforces. Screen *content* (what each dashboard, device, or tracker screen renders) lives in the sibling docs cross-linked at the bottom.
 
 ## App Shell & Provider Hierarchy
 
@@ -35,7 +35,7 @@ flowchart TB
 
 ### Font loading and splash control
 
-`AppShell` loads the four Lato faces via `useFonts({ Lato_300Light, Lato_400Regular, Lato_700Bold, Lato_900Black })` from `@expo-google-fonts/lato`. `SplashScreen.preventAutoHideAsync()` is called at module load so the native splash stays visible while fonts load (no text flash). Once `fontsLoaded || fontError` is true, a `useEffect` calls `SplashScreen.hideAsync()`. Until then the component returns `null`. The Lato family is the only type family — Figtree is forbidden (see [Design System](./design-system)).
+`AppShell` loads the four Lato faces via `useFonts({ Lato_300Light, Lato_400Regular, Lato_700Bold, Lato_900Black })` from `@expo-google-fonts/lato`. `SplashScreen.preventAutoHideAsync()` is called at module load so the native splash stays visible while fonts load (no text flash). Once `fontsLoaded || fontError` is true, a `useEffect` calls `SplashScreen.hideAsync()`. Until then the component returns `null`. The Lato family is the only type family; Figtree is forbidden (see [Design System](./design-system)).
 
 ### Resolved color mode and status bar
 
@@ -43,7 +43,7 @@ flowchart TB
 
 ### Root Stack
 
-The root `Stack` is configured with <code v-pre>screenOptions=&#123;&#123; headerShown: false, contentStyle: &#123; backgroundColor: "transparent" &#125;, animation: "slide_from_right" &#125;&#125;</code>. It declares exactly four top-level screens, in order:
+The root `Stack` is configured with <code v-pre>screenOptions=&#123;&#123; headerShown: false, contentStyle: &#123; backgroundColor: "transparent" &#125;, animation: "slide_from_right" &#125;&#125;</code>. It declares four top-level screens, in order:
 
 | # | Screen name | File |
 | :-: | :--- | :--- |
@@ -52,7 +52,7 @@ The root `Stack` is configured with <code v-pre>screenOptions=&#123;&#123; heade
 | 3 | `get-started` | `src/app/get-started.tsx` |
 | 4 | `auth` | `src/app/auth.tsx` |
 
-Everything below these — the role groups and their tab screens — mounts inside the `(coach)` and `(player)` groups, not at the root.
+Everything below these (the role groups and their tab screens) mounts inside the `(coach)` and `(player)` groups, not at the root.
 
 ## Expo Router & typedRoutes
 
@@ -79,7 +79,7 @@ The full route tree, with file paths relative to the mobile repo root. Group `_l
 
 ### Coach group `(coach)`
 
-Layout: `src/app/(coach)/_layout.tsx` — `useRoleGuard("coach")`, `unstable_settings.initialRouteName: "(tabs)"`, wraps in `TrackerProvider` > `DeviceDemoProvider role="coach"` > `Stack` (`headerShown: false`).
+Layout: `src/app/(coach)/_layout.tsx`. `useRoleGuard("coach")`, `unstable_settings.initialRouteName: "(tabs)"`, wraps in `TrackerProvider` > `DeviceDemoProvider role="coach"` > `Stack` (`headerShown: false`).
 
 | Route | File | Screen component |
 | :--- | :--- | :--- |
@@ -98,7 +98,7 @@ Layout: `src/app/(coach)/_layout.tsx` — `useRoleGuard("coach")`, `unstable_set
 
 ### Player group `(player)`
 
-Layout: `src/app/(player)/_layout.tsx` — `useRoleGuard("player")`, `unstable_settings.initialRouteName: "(tabs)"`, wraps in `TrackerProvider` > `DeviceDemoProvider role="player"` > `Stack` (`headerShown: false`). The player tab group uses `dashboard` as the route name (with the label "Home") rather than `home`.
+Layout: `src/app/(player)/_layout.tsx`. `useRoleGuard("player")`, `unstable_settings.initialRouteName: "(tabs)"`, wraps in `TrackerProvider` > `DeviceDemoProvider role="player"` > `Stack` (`headerShown: false`). The player tab group uses `dashboard` as the route name (with the label "Home") rather than `home`.
 
 | Route | File | Screen component |
 | :--- | :--- | :--- |
@@ -121,13 +121,13 @@ Source: `src/app/index.tsx`. Verified by `src/app/index-source.test.mjs`.
 
 `src/app/index.tsx` is the first screen mounted. It renders only the SSP mark on a neutral background while it decides where to route, so the entry surface is "identity only, never a dashboard or auth state that may be replaced a moment later." The decision flow, in order:
 
-1. **`FORCE_DASHBOARD` override** — `process.env.EXPO_PUBLIC_FORCE_DASHBOARD === "true"` → `router.replace("/(coach)/(tabs)/home")` and return. (This var is referenced in `index.tsx` but is **not** listed in `.env.example`; it is a dev-only convenience.)
-2. **`FORCE_ONBOARDING` override** — `process.env.EXPO_PUBLIC_FORCE_ONBOARDING === "true"` → `router.replace("/onboarding")` and return.
-3. **Onboarding completion** — `isOnboardingComplete()` (AsyncStorage key `"onboarding-complete"`). If incomplete → `router.replace("/onboarding")`.
-4. **Remember-session flag** — `shouldRememberSession()` (AsyncStorage key `"remember-session"`, treated as `true` unless the stored value is exactly `"false"`). If the user did not choose to stay signed in → `supabase.auth.signOut({ scope: "local" })` then `router.replace("/auth")`.
-5. **Supabase session** — `supabase.auth.getSession()`. If no session → `router.replace("/auth")`.
-6. **Role resolution** — start with `getUserRole()` (supabase `user_metadata.role` with `athlete` mapped to `player`, then AsyncStorage `"user-role"`, default `"coach"`). Call `api.getMe()`; if `me.roles.includes("athlete")` set role to `"player"`, otherwise `"coach"`. If `api.getMe()` throws (e.g. API temporarily unreachable) the persisted role is kept.
-7. **Role tab** — `router.replace(role === "player" ? "/(player)/(tabs)/dashboard" : "/(coach)/(tabs)/home")`.
+1. **`FORCE_DASHBOARD` override**: `process.env.EXPO_PUBLIC_FORCE_DASHBOARD === "true"` → `router.replace("/(coach)/(tabs)/home")` and return. (This var is referenced in `index.tsx` but is **not** listed in `.env.example`; it is a dev-only convenience.)
+2. **`FORCE_ONBOARDING` override**: `process.env.EXPO_PUBLIC_FORCE_ONBOARDING === "true"` → `router.replace("/onboarding")` and return.
+3. **Onboarding completion**: `isOnboardingComplete()` (AsyncStorage key `"onboarding-complete"`). If incomplete → `router.replace("/onboarding")`.
+4. **Remember-session flag**: `shouldRememberSession()` (AsyncStorage key `"remember-session"`, treated as `true` unless the stored value is exactly `"false"`). If the user did not choose to stay signed in → `supabase.auth.signOut({ scope: "local" })` then `router.replace("/auth")`.
+5. **Supabase session**: `supabase.auth.getSession()`. If no session → `router.replace("/auth")`.
+6. **Role resolution**: start with `getUserRole()` (supabase `user_metadata.role` with `athlete` mapped to `player`, then AsyncStorage `"user-role"`, default `"coach"`). Call `api.getMe()`; if `me.roles.includes("athlete")` set role to `"player"`, otherwise `"coach"`. If `api.getMe()` throws (e.g. API temporarily unreachable) the persisted role is kept.
+7. **Role tab**: `router.replace(role === "player" ? "/(player)/(tabs)/dashboard" : "/(coach)/(tabs)/home")`.
 
 ```mermaid
 flowchart TD
@@ -162,7 +162,7 @@ flowchart TD
     Resolve -- no --> CoachTab
 ```
 
-`api.getMe()` is a hand-rolled `fetch` against the SSP-API gateway — not a Hono `hc()` client and not an `AppType` contract import. See [API Client](./api-client) and the [Backend Client Contract](../backend/client-contract).
+`api.getMe()` is a hand-rolled `fetch` against the SSP-API gateway, not a Hono `hc()` client or an `AppType` contract import. See [API Client](./api-client) and the [Backend Client Contract](../backend/client-contract).
 
 ## Role Guards
 
@@ -176,6 +176,8 @@ Each role group layout calls `useRoleGuard(allowedRole)` before rendering any sc
 | `"player"` | `/(player)/(tabs)/dashboard` |
 
 The hook uses an `active` flag cleaned up in the effect's return, so a rapid unmount does not fire a stale `router.replace`. The guard runs inside the group `_layout.tsx`, so it executes before any of the group's screens mount. The role model (`Role` = `"coach" | "player"`) is the app's UI role, distinct from the backend `ApiRole` enum (`athlete`/`coach`/`sub_coach`/`organisation_admin`/`ssp_super_admin`). `getUserRole` maps the backend `athlete` value to the UI `player`; the default is `coach`. See [Auth & Onboarding](./auth-and-onboarding).
+
+This guard is an information-architecture convenience, **not an authorization boundary**. Its fallback can read user-editable Supabase `user_metadata` or local AsyncStorage. The SSP-API must continue to authorize every request from its verified JWT and database-backed roles; changing a local role can only affect which mobile screens are attempted.
 
 ## Native Tabs per Role
 
@@ -201,7 +203,7 @@ Both tab bars use `NativeTabs` from `expo-router/unstable-native-tabs` with iden
 | 3 | `trainer` | Trainer | `dumbbell` / `dumbbell.fill` | `fitness_center` |
 | 4 | `profile` | Profile | `person.crop.circle` / `person.crop.circle.fill` | `account_circle` |
 
-Note the player's first tab is the route `dashboard` (file `src/app/(player)/(tabs)/dashboard.tsx`) but is labeled "Home" in the UI. The coach's first tab is the route `home` (file `src/app/(coach)/(tabs)/home.tsx`). Both point at brand blue `#003399`.
+The player's first tab is the route `dashboard` (file `src/app/(player)/(tabs)/dashboard.tsx`) but is labeled "Home" in the UI. The coach's first tab is the route `home` (file `src/app/(coach)/(tabs)/home.tsx`). Both point at brand blue `#003399`.
 
 ## Navigation Conventions
 
@@ -240,7 +242,7 @@ This is **enforced** by `src/components/dashboard/session-history-source.test.mj
 
 ### Where `router.back` is used
 
-`router.back()` does appear in `onBack` handlers for push screens that have a genuine parent in the stack — for example `team.tsx` and `organisation.tsx` (a bare `router.back()`) and `device/firmware.tsx` and `device.tsx`'s hub header (both guarded with `router.canGoBack() ? router.back() : router.replace(...)` so a deep-link entry still has somewhere to go). The test-enforced ban is scoped to session detail only, where a pop would break the stable-origin invariant; `device/[id].tsx` avoids `router.back` by convention (it uses `router.dismissTo` to reveal the hub) but is not covered by the test.
+`router.back()` does appear in `onBack` handlers for push screens that have a genuine parent in the stack. Examples include `team.tsx` and `organisation.tsx` (a bare `router.back()`) and `device/firmware.tsx` and `device.tsx`'s hub header (both guarded with `router.canGoBack() ? router.back() : router.replace(...)` so a deep-link entry still has somewhere to go). The test-enforced ban is scoped to session detail only, where a pop would break the stable-origin invariant; `device/[id].tsx` avoids `router.back` by convention (it uses `router.dismissTo` to reveal the hub) but is not covered by the test.
 
 ## Provider / Component Dependency Diagram
 
@@ -291,7 +293,7 @@ flowchart TB
     subgraph External["External"]
         Gateway["SSP-API gateway<br/><i>Hono on Vercel</i>"]
         SupabaseCloud["Supabase Auth"]
-        S1["SSP-S1 tracker<br/><i>BLE Nordic UART</i>"]
+        S1["SSP-S1 tracker<br/><i>custom BLE GATT service</i>"]
     end
 
     AppShell --> Index
@@ -311,13 +313,13 @@ flowchart TB
 
 ## Cross-References
 
-- [Mobile App Overview](./) — product summary, stack table, current state (mocked vs real).
-- [API Client](./api-client) — the hand-rolled `fetch` client, types, and 27-method endpoint table.
-- [Auth & Onboarding](./auth-and-onboarding) — Supabase sign-in, the onboarding carousel, and the get-started wizard.
-- [Devices](./devices) — the demo/mock device feature (`DeviceDemoProvider`, `DeviceHubScreen`, `AddDeviceScreen`).
-- [Tracker & Sync](./tracker-and-sync) — real BLE tracking via `TrackerProvider` and `NativeTrackerService`.
-- [Dashboard & Analytics](./dashboard-and-analytics) — what each coach/player tab screen renders.
-- [Design System](./design-system) — brand colors, Lato typography, SEMANTIC_COLORS, 48dp touch targets.
-- [Backend Architecture](../backend/architecture) — the SSP-API gateway this app calls.
-- [Backend Client Contract](../backend/client-contract) — the `AppType` the backend publishes (the mobile app does **not** consume it; it hand-rolls fetch against the same paths).
-- [Backend Auth & Security](../backend/auth-and-security) — the JWT the mobile Supabase token becomes at the gateway.
+- [Mobile App Overview](./): product summary, stack table, current state (mocked vs real).
+- [API Client](./api-client): the hand-rolled `fetch` client, types, and 28-method endpoint table.
+- [Auth & Onboarding](./auth-and-onboarding): Supabase sign-in, the onboarding carousel, and the get-started wizard.
+- [Devices](./devices): the demo/mock device feature (`DeviceDemoProvider`, `DeviceHubScreen`, `AddDeviceScreen`).
+- [Tracker & Sync](./tracker-and-sync): real BLE tracking via `TrackerProvider` and `NativeTrackerService`.
+- [Dashboard & Analytics](./dashboard-and-analytics): what each coach/player tab screen renders.
+- [Design System](./design-system): brand colors, Lato typography, SEMANTIC_COLORS, 48dp touch targets.
+- [Backend Architecture](../backend/architecture): the SSP-API gateway this app calls.
+- [Backend Client Contract](../backend/client-contract): the `AppType` the backend publishes (the mobile app does **not** consume it; it hand-rolls fetch against the same paths).
+- [Backend Auth & Security](../backend/auth-and-security): the JWT the mobile Supabase token becomes at the gateway.

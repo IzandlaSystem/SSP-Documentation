@@ -6,7 +6,7 @@ outline: deep
 
 # Analytics API (Phase 1)
 
-The Analytics API surfaces aggregated training load across a squad's sessions and a per-session metric trend for a single athlete. Handlers live in [`src/routes/analytics.ts`](https://github.com/IzandlaSystems/SSP-API/blob/main/src/routes/analytics.ts) and are **root-mounted** in `app.ts` (`route('/', analytics)`), so the full paths are `/teams/:id/analytics` and `/athletes/:id/analytics` — even though the handlers are not in `teams.ts` or `athletes.ts`. Both read from the `session_athlete_metrics` table populated by the telemetry parse pipeline.
+The Analytics API surfaces aggregated training load across a squad's sessions and a per-session metric trend for a single athlete. Handlers live in [`src/routes/analytics.ts`](https://github.com/IzandlaSystems/SSP-API/blob/main/src/routes/analytics.ts) and are **root-mounted** in `app.ts` (`route('/', analytics)`), so the full paths are `/teams/:id/analytics` and `/athletes/:id/analytics`, even though the handlers are not in `teams.ts` or `athletes.ts`. Both read from the `session_athlete_metrics` table populated by the telemetry parse pipeline.
 
 See also: [Teams](./teams), [Athletes](./athletes), [Metrics & Targets](./metrics).
 
@@ -20,7 +20,7 @@ Aggregates `session_athlete_metrics` across every session a squad held within an
 - **Method:** `GET`
 - **Auth:** JWT
 - **Required Roles:** `coach`, `organisation_admin`, `ssp_super_admin` (via `requireRoles`; `coach` cascades up to org admin and super admin)
-- **Tenant Scope:** Team — gated by `hasTeamResourceAccess(user, teamId)` (403 if denied)
+- **Tenant Scope:** Team, gated by `hasTeamResourceAccess(user, teamId)` (403 if denied)
 - **Query Parameters:**
   - `from` (`string`, optional): ISO datetime; filters sessions where `planned_start_at >= from`.
   - `to` (`string`, optional): ISO datetime; filters sessions where `planned_start_at <= to`.
@@ -73,18 +73,20 @@ When the window contains no sessions for the team:
 
 ## 2. Athlete Analytics Trend (`GET /athletes/:id/analytics`)
 
+`organisation_admin` is accepted without comparing the athlete to the caller's organisation. This is a current cross-tenant source gap; coaches and athletes use shared-team/self checks.
+
 Returns the full `session_athlete_metrics` history for a single athlete as a time-ordered trend, optionally narrowed by date. There is no `requireRoles` gate; access is decided manually.
 
 - **Path:** `/athletes/:id/analytics`
 - **Method:** `GET`
 - **Auth:** JWT
-- **Required Roles:** none — manual access check. Passes if the caller is an `organisation_admin` or `ssp_super_admin`, is the athlete themselves (`athletes.user_id === user.id`), or is a `coach` whose caller-context teams intersect the athlete's active `team_memberships` (`left_at is null`).
-- **Tenant Scope:** Athlete — cross-tenant for admins, self for athletes, shared-team for coaches
+- **Required Roles:** none (manual access check). Passes if the caller is an `organisation_admin` or `ssp_super_admin`, is the athlete themselves (`athletes.user_id === user.id`), or is a `coach` whose caller-context teams intersect the athlete's active `team_memberships` (`left_at is null`).
+- **Tenant Scope:** Athlete, cross-tenant for admins, self for athletes, shared-team for coaches
 - **Query Parameters:**
   - `from` (`string`, optional): ISO datetime; filters `recorded_at >= from`.
   - `to` (`string`, optional): ISO datetime; filters `recorded_at <= to`.
 
-The handler selects `*` from `session_athlete_metrics` where `athlete_id = :id`, applies the optional `recorded_at` bounds, and orders ascending by `recorded_at`. The `trend` array therefore contains complete metric rows (see `session_athlete_metrics` columns: `distance_meters`, `max_speed_mps`, `sprint_count`, `workload_index`, `recorded_at`, and the rest).
+The handler selects `*` from `session_athlete_metrics` where `athlete_id = :id`, applies the optional `recorded_at` bounds, and orders ascending by `recorded_at`. The `trend` array contains complete metric rows (see `session_athlete_metrics` columns: `distance_meters`, `max_speed_mps`, `sprint_count`, `workload_index`, `recorded_at`, and the rest).
 
 ### Response (`200 OK`)
 

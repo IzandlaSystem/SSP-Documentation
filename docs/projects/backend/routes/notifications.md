@@ -6,7 +6,7 @@ outline: deep
 
 # Notifications API (Phase 1)
 
-The Notifications API delivers each user a personal inbox of in-app alerts and lets them mark items as read. Both routes are JWT-authenticated with no role gate; every notification is scoped to its `recipient_user_id`, so a caller only ever sees or touches their own rows. See [Auth & Security](../auth-and-security) for how the `auth` middleware verifies the Supabase JWT and loads DB roles on every request.
+The Notifications API delivers each user a personal inbox of in-app alerts and lets them mark items as read. Both routes are JWT-authenticated with no role gate; every notification is scoped to its `recipient_user_id`, so a caller only sees or touches their own rows. See [Auth & Security](../auth-and-security) for how the `auth` middleware verifies the Supabase JWT and loads DB roles on every request.
 
 Routes are defined in `src/routes/notifications.ts` and mounted at `/notifications` in `app.ts`.
 
@@ -19,7 +19,7 @@ Returns the authenticated caller's notifications, newest first.
 - **Path:** `/notifications`
 - **Method:** `GET`
 - **Auth:** JWT
-- **Required Roles:** none — any authenticated user (recipient-scoped)
+- **Required Roles:** none (any authenticated user, recipient-scoped)
 - **Tenant Scope:** Self (`recipient_user_id = user.id`)
 - **Query Parameters:**
   - `unread` (`string`, optional): when set to the literal `'true'`, filters to unread rows via `is('read_at', null)`. Any other value (or omitting the param) returns all notifications, read and unread.
@@ -65,7 +65,7 @@ Records the `read_at` timestamp on a notification owned by the caller.
 - **Path:** `/notifications/:id/read`
 - **Method:** `PATCH`
 - **Auth:** JWT
-- **Required Roles:** none — any authenticated user (must be the recipient)
+- **Required Roles:** none (any authenticated user; must be the recipient)
 - **Tenant Scope:** Self (`recipient_user_id = user.id`)
 - **Path Parameters:**
   - `id` (`uuid`, required): the notification to mark read.
@@ -97,5 +97,5 @@ Returns the full updated `notifications` row (same columns as the list endpoint)
 | Status | Body | When |
 | :--- | :--- | :--- |
 | 401 | `{ error: "..." }` | Missing/invalid JWT (from `auth` middleware). |
-| 404 | `{ error: "Not found" }` | No row matched — either the `id` does not exist or it belongs to another user (recipient scope). |
+| 404 | `{ error: "Not found" }` | No row matched: either the `id` does not exist or it belongs to another user (recipient scope). |
 | 500 | `{ error: "<message>" }` | Supabase returned an error from the update. |

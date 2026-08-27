@@ -1,16 +1,20 @@
 ---
 title: Mobile App Overview
-description: SSP-Mobile-App — the Expo companion app for SSP-S1 trackers, serving coaches and athletes with performance dashboards, live BLE tracking, device management, and firmware maintenance.
+description: SSP-Mobile-App, the Expo companion app for SSP-S1 trackers, serving coaches and athletes with performance dashboards, live BLE tracking, and a clearly separated Demo device-management experience.
 outline: deep
 ---
 
 # Mobile App Overview
 
-**SSP-Mobile-App** is the Expo / React Native companion app for the **SSP-S1** sports tracker (Nordic Thingy:91X / nRF9151). It serves **coaches** and **athletes** with equal priority as a single, connected workflow: performance dashboards, live BLE tracking, device management, and firmware maintenance.
+**SSP-Mobile-App** is the Expo / React Native companion app for the **SSP-S1** sports tracker (Nordic Thingy:91X / nRF9151). It serves **coaches** and **athletes** with performance dashboards and a source-implemented BLE recording/download flow. Device inventory, pairing, sync, and firmware-update UI are currently Demo-only; the mobile app has no implemented OTA/DFU transport.
 
-The app talks to two backends: **Supabase Auth** for sign-in / sign-up / session (direct), and the **SSP-API** gateway for all data reads and writes (via a hand-rolled `fetch` client — see [API Client](./api-client)). Hardware (`SSP-S1`) is reached over BLE from the mobile app only, never from the gateway. See the backend [Architecture](../backend/architecture) for the gateway topology this app calls.
+The app talks to two backends: **Supabase Auth** for sign-in / sign-up / session (direct), and the **SSP-API** gateway for all data reads and writes (via a hand-rolled `fetch` client; see [API Client](./api-client)). Hardware (`SSP-S1`) is reached over BLE from the mobile app only, never from the gateway. See the backend [Architecture](../backend/architecture) for the gateway topology this app calls.
 
-> The repo's `CLAUDE.md` is **stale** and contradicts the actual working tree (it claims a "minimal scaffold", "BLE app deleted", "Figtree font", a "green CTA", and "no test runner" — none of which are true). This documentation cites actual source files, not `CLAUDE.md`.
+> The repo's `CLAUDE.md` is **stale** and contradicts the actual working tree (it claims a "minimal scaffold", "BLE app deleted", "Figtree font", a "green CTA", and "no test runner", none of which are true). This documentation cites actual source files, not `CLAUDE.md`.
+
+::: info Verification baseline: 2026-08-15
+These pages were checked against branch `codex/phase0-contracts` at commit `e755d64e8cc4f9c5b0dee7b889f0147c96be12c6`, including the pre-existing local changes in `app.json`, `src/lib/supabase.ts`, untracked `eas.json`, and untracked `assets/brand/feature-graphic.jpg`. Source tests pass (15 Vitest + 149 Node tests). Repository-wide TypeScript and ESLint checks are not green; see [Testing](./testing). No simulator, live Supabase/SSP-API environment, signed build, or physical SSP-S1 was exercised by this source audit.
+:::
 
 ---
 
@@ -34,7 +38,7 @@ Source: `package.json`, `app.json`, `tsconfig.json`, `metro.config.js`, `babel.c
 | Animation | `@legendapp/motion` | ^2.5.3 | FadeIn pattern, reduce-motion aware |
 | Icons | `lucide-react-native` | ^1.25.0 | |
 | Fonts | `@expo-google-fonts/lato` | ^0.4.1 | Lato_300Light / 400Regular / 700Bold / 900Black (Figtree is forbidden) |
-| Test runners | `vitest` + `node --test` | ^4.1.10 | Dual runner — `.test.ts` (vitest) + `.test.mjs` (node source-contract tests) |
+| Test runners | `vitest` + `node --test` | ^4.1.10 | Dual runner: `.test.ts` (vitest) + `.test.mjs` (node source-contract tests) |
 
 See [Configuration & Build](./configuration) for `app.json`, `eas.json`, env vars, and the BLE-requires-dev-build note.
 
@@ -42,18 +46,18 @@ See [Configuration & Build](./configuration) for `app.json`, `eas.json`, env var
 
 ## What's Implemented vs Mocked
 
-The app is a full, role-gated application — not a scaffold. The honest current state, per the actual working tree:
+The app is a full, role-gated application, not a scaffold. The current state, per the actual working tree:
 
 | Area | State | Detail |
 | :--- | :--- | :--- |
 | Role-gated routing | **Implemented** | `src/app/index.tsx` entry gate resolves role (athlete→player, else coach) via `api.getMe()`; `(coach)/` and `(player)/` groups each guarded by `useRoleGuard`. |
-| Auth | **Implemented** | Supabase `signInWithPassword` (`src/app/auth.tsx`), `signUp` in get-started (`src/app/get-started.tsx`), session gate, logout. |
+| Auth | **Source implemented; configuration gap documented** | Supabase `signInWithPassword` (`src/app/auth.tsx`), `signUp` in get-started (`src/app/get-started.tsx`), session gate, logout. The sign-up flow does not handle a successful no-session response when Confirm Email is enabled; see [Auth & Onboarding](./auth-and-onboarding). |
 | Onboarding + get-started wizard | **Implemented** | 3-page onboarding carousel (`src/app/onboarding.tsx`) + multi-step get-started wizard (`src/app/get-started.tsx` + `src/components/get-started/*Step.tsx`). |
-| Live BLE tracking | **Implemented** | `src/features/tracker/protocol.ts` (GATT service + characteristics), `tracker-service.ts` (BleManager), `TrackerProvider.tsx`, `sync.ts` upload, `FirmwareTrackerScreen.tsx`. Requires a development build — **not** Expo Go. |
+| Live BLE tracking | **Source implemented; runtime proof open** | `src/features/tracker/protocol.ts` (GATT service + characteristics), `tracker-service.ts` (BleManager), `TrackerProvider.tsx`, `sync.ts` upload, `FirmwareTrackerScreen.tsx`. Requires a development build (**not** Expo Go); the source audit does not prove radio, firmware, or backend interoperability. |
 | Session history & detail | **Real API data** | `useApiSessions` / `useApiSession` (`src/hooks/use-api-sessions.ts`) carry real data from the SSP-API. |
 | Profile identity | **Real API data** | `useApiMe` (`src/hooks/use-api-me.ts`) via `api.getMe()`. |
 | Dashboards & analytics charts | **Mocked / empty** | All `MOCK_*` arrays in `src/components/dashboard/mock-data.ts` are `[]`; screens render empty states. Analytics charts use empty `MOCK_*`, **not** API-fed. `FIXTURE_*` constants hold sample data but are **not** imported by screens (tests only). |
-| Device management | **Demo / mock only** | `src/features/devices/**` simulates all BLE actions with `DEMO_DELAY_MS = 650` and "no hardware was contacted" disclosures. No `react-native-ble-plx` / supabase / async-storage imports in that tree (test-enforced). Real device BLE lives in `src/features/tracker/` — see [Tracker & Sync](./tracker-and-sync). |
+| Device management | **Demo / mock only** | `src/features/devices/**` simulates all BLE actions with `DEMO_DELAY_MS = 650` and "no hardware was contacted" disclosures. No `react-native-ble-plx` / supabase / async-storage imports in that tree (test-enforced). Real device BLE lives in `src/features/tracker/`; see [Tracker & Sync](./tracker-and-sync). |
 | Team / organisation screens | **Read-only / empty** | `team.tsx` and `organisation.tsx` render non-interactive explanatory content with empty `MOCK_*` data. |
 
 See [Dashboard & Analytics](./dashboard-and-analytics) for the mock-vs-real data boundary and [Devices](./devices) for the demo-only device feature.
@@ -77,30 +81,31 @@ See [Architecture & Navigation](./architecture) for the full route tree, provide
 
 ## App Layering
 
-The app is structured as four layers: UI screens (expo-router file-based routes) sit above a provider tree, which sits above the service layer, which talks to external systems. The root layout (`src/app/_layout.tsx`) assembles `ThemeProvider → SafeAreaProvider → GluestackUIProvider(mode) → StatusBar → Stack`; each role group adds `TrackerProvider` and `DeviceDemoProvider` inside its `Stack`.
+The app is structured as four layers: UI screens (expo-router file-based routes) sit above a provider tree, which sits above the service layer, which talks to external systems. The root layout (`src/app/_layout.tsx`) assembles `ThemeProvider → SafeAreaProvider → GluestackUIProvider(mode) → StatusBar → Stack`; each role group wraps its `Stack` with `TrackerProvider → DeviceDemoProvider`.
 
 ```mermaid
 flowchart TB
     subgraph External["External systems"]
         Gateway["SSP-API gateway<br/><i>Hono on Vercel Functions</i>"]
         SupabaseAuth["Supabase Auth<br/><i>JWT + user_metadata</i>"]
+        PhoneLocation["Phone location services<br/><i>expo-location</i>"]
         SSPS1["SSP-S1 tracker<br/><i>Nordic Thingy:91X / nRF9151</i>"]
     end
 
     subgraph Services["Service layer"]
-        ApiClient["api.ts<br/><i>hand-rolled fetch — createApiClient</i>"]
+        ApiClient["api.ts<br/><i>hand-rolled fetch: createApiClient</i>"]
         SupabaseClient["supabase.ts<br/><i>@supabase/supabase-js</i>"]
         TrackerService["tracker-service.ts<br/><i>react-native-ble-plx BleManager</i>"]
     end
 
     subgraph Providers["Provider tree (outer → inner)"]
-        Theme["ThemeProvider<br/><i>src/theme.tsx — light/dark/system</i>"]
+        Theme["ThemeProvider<br/><i>src/theme.tsx: light/dark/system</i>"]
         Gluestack["GluestackUIProvider<br/><i>components/ui/gluestack-ui-provider</i>"]
         Tracker["TrackerProvider<br/><i>src/features/tracker/TrackerProvider.tsx</i>"]
         DeviceDemo["DeviceDemoProvider<br/><i>src/features/devices/DeviceDemoProvider.tsx</i>"]
     end
 
-    subgraph UI["UI screens — expo-router file-based routes"]
+    subgraph UI["UI screens: expo-router file-based routes"]
         TopLevel["Top-level (root Stack)<br/>index · auth · onboarding · get-started"]
         Coach["(coach)/ group<br/>home · analytics · squad · profile<br/>+ device · session · team · organisation"]
         Player["(player)/ group<br/>dashboard · analytics · trainer · profile<br/>+ device · session · team · organisation"]
@@ -123,10 +128,10 @@ flowchart TB
     ApiClient -->|"HTTPS + Bearer JWT<br/>(hand-rolled, NOT Hono hc)"| Gateway
     SupabaseClient -->|"sign-in / sign-up / session"| SupabaseAuth
     TrackerService -->|"BLE GATT"| SSPS1
-    TrackerService -.->|"assistGps via expo-location"| SupabaseClient
+    PhoneLocation -->|"reference position + time"| TrackerService
 ```
 
-The API client is a **hand-rolled `fetch`** wrapper (`src/lib/api.ts`, `createApiClient`) — it is **not** Hono `hc()`, **not** `hono/client`, and there is **no** `AppType` contract import. The backend publishes an `AppType` contract; the mobile app does not currently consume it. See [API Client](./api-client) and the backend [Client Contract](../backend/client-contract).
+The API client is a **hand-rolled `fetch`** wrapper (`src/lib/api.ts`, `createApiClient`): it is **not** Hono `hc()`, **not** `hono/client`, and there is **no** `AppType` contract import. The backend publishes an `AppType` contract; the mobile app does not currently consume it. See [API Client](./api-client) and the backend [Client Contract](../backend/client-contract).
 
 ---
 
@@ -149,8 +154,8 @@ The API client is a **hand-rolled `fetch`** wrapper (`src/lib/api.ts`, `createAp
 
 The mobile app's `api.ts` methods map onto the SSP-API gateway route contract. Cross-references into the backend docs:
 
-- [Backend Architecture](../backend/architecture) — gateway topology and route mount chain.
-- [Backend API Reference](../backend/api-reference) — the endpoint surface this app calls.
-- [Backend Auth & Security](../backend/auth-and-security) — the JWT the mobile Supabase token becomes once verified by the gateway.
-- [Backend Client Contract](../backend/client-contract) — the `AppType` the backend publishes (mobile does not currently consume it).
-- [Backend Ingestion Pipeline](../backend/ingestion-pipeline) — the signed-URL upload + `completeIngest` flow used by `sync.ts`.
+- [Backend Architecture](../backend/architecture): gateway topology and route mount chain.
+- [Backend API Reference](../backend/api-reference): the endpoint surface this app calls.
+- [Backend Auth & Security](../backend/auth-and-security): the JWT the mobile Supabase token becomes once verified by the gateway.
+- [Backend Client Contract](../backend/client-contract): the `AppType` the backend publishes (mobile does not currently consume it).
+- [Backend Ingestion Pipeline](../backend/ingestion-pipeline): the signed-URL upload + `completeIngest` flow used by `sync.ts`.

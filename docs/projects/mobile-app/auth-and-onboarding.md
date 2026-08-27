@@ -8,19 +8,19 @@ outline: deep
 
 The SSP Mobile App authenticates directly against **Supabase Auth** and uses the
 resulting JWT as the bearer token for every backend API call. The backend
-gateway verifies that JWT and loads live roles from the database on each request
-— see [Backend Auth & Security](../backend/auth-and-security) for the
+gateway verifies that JWT and loads live roles from the database on each request.
+See [Backend Auth & Security](../backend/auth-and-security) for the
 verification flow, role cascade, and tenant isolation the mobile token unlocks.
 
 This page covers four client-side concerns, all in `src/app/` and `src/lib/`:
 
-1. **Sign-in** (`src/app/auth.tsx`) — `supabase.auth.signInWithPassword`.
-2. **Launch gate** (`src/app/index.tsx` + `src/lib/session.ts`) — onboarding,
+1. **Sign-in** (`src/app/auth.tsx`): `supabase.auth.signInWithPassword`.
+2. **Launch gate** (`src/app/index.tsx` + `src/lib/session.ts`): onboarding,
    remember-session, Supabase session, and role resolution.
-3. **First-run flows** (`src/app/onboarding.tsx`, `src/app/get-started.tsx`) —
+3. **First-run flows** (`src/app/onboarding.tsx`, `src/app/get-started.tsx`):
    the 3-page carousel and the multi-step registration wizard.
-4. **Logout** (`src/lib/logout.ts` + `src/components/dashboard/LogoutSettingsRow.tsx`)
-   — `Promise.allSettled` cleanup with navigation last.
+4. **Logout** (`src/lib/logout.ts` + `src/components/dashboard/LogoutSettingsRow.tsx`):
+   `Promise.allSettled` cleanup with navigation last.
 
 ```mermaid
 flowchart TD
@@ -59,7 +59,7 @@ flowchart TD
 ```
 
 > The gate renders only the `ssp-mark` and an `SSP, loading` accessibility label
-> while it decides — never a dashboard or auth state that may be replaced a
+> while it decides, never a dashboard or auth state that may be replaced a
 > moment later. Source: `src/app/index.tsx`.
 
 ---
@@ -109,10 +109,10 @@ Key behaviors:
 | :--- | :--- |
 | Email / Password inputs | `min-h-12 bg-card`, with `Mail` / `Lock` leading icons. `KeyboardAvoidingView` shifts on iOS. |
 | Show password | `InputSlot` with `accessibilityRole="button"` and label `"Show password"` / `"Hide password"`, `min-h-12 min-w-12`. |
-| Remember me | A bare `<Switch accessibilityLabel="Remember me" className="min-h-12 min-w-12">` — no wrapping `Pressable`. Defaults to `true`. |
+| Remember me | A bare `<Switch accessibilityLabel="Remember me" className="min-h-12 min-w-12">` (no wrapping `Pressable`). Defaults to `true`. |
 | Sign in button | <code v-pre>accessibilityState=&#123;&#123; disabled: submitting, busy: submitting &#125;&#125;</code>; label flips to `"Signing in…"`. |
 | Get started link | `router.replace("/get-started")` (link button, `text-primary`). |
-| Back button | `goBack()` — `router.back()` if `canGoBack()`, else `router.replace("/onboarding")` so the carousel's Get-started / Log in screen stays reachable. |
+| Back button | `goBack()` calls `router.back()` if `canGoBack()`, else `router.replace("/onboarding")` so the carousel's Get-started / Log in screen stays reachable. |
 
 ---
 
@@ -145,7 +145,7 @@ and end the gate):
    `AsyncStorage.getItem("remember-session") !== "false"` (so an absent key
    defaults to `true`). If `false`, the gate calls
    `supabase.auth.signOut({ scope: "local" })` and routes to `/auth`.
-3. **Supabase session?** `supabase.auth.getSession()` — if no session, `/auth`.
+3. **Supabase session?** `supabase.auth.getSession()`: if no session, `/auth`.
 4. **Role resolution.** `let role = await getUserRole()` (persisted fallback),
    then `api.getMe()` wrapped in `try/catch`. If the API responds,
    `me.roles.includes("athlete") ? "player" : "coach"` overrides the persisted
@@ -153,7 +153,7 @@ and end the gate):
 5. **Route.** `player` → `/(player)/(tabs)/dashboard`; otherwise
    `/(coach)/(tabs)/home`.
 
-### `src/lib/session.ts` — role mapping
+### `src/lib/session.ts`: role mapping
 
 The app's UI knows exactly two roles, `Role = "coach" | "player"`. The backend
 `ApiRole` set is `athlete | coach | sub_coach | organisation_admin |
@@ -170,9 +170,9 @@ export async function getUserRole(): Promise<Role> {
 
 | Source | Key | Mapping | Default |
 | :--- | :--- | :--- | :--- |
-| Supabase `user.user_metadata.role` | `role` | `coach`→coach; `athlete`/`player`→player | — |
-| AsyncStorage | `"user-role"` | literal `coach` / `player` | — |
-| Fallback | — | — | `coach` |
+| Supabase `user.user_metadata.role` | `role` | `coach`→coach; `athlete`/`player`→player | None |
+| AsyncStorage | `"user-role"` | literal `coach` / `player` | None |
+| Fallback | None | None | `coach` |
 
 The runtime path in `auth.tsx` / `index.tsx` is **API-authoritative**
 (`api.getMe().roles`), and `getUserRole` is the persisted fallback used only
@@ -180,7 +180,11 @@ when the API is unreachable. The `athlete → player` mapping is the only
 downcast; every non-athlete (coach, sub_coach, organisation_admin,
 ssp_super_admin) resolves to the coach information architecture.
 
-### `src/lib/session.ts` — helpers
+::: warning UI routing is not authorization
+`user_metadata` and AsyncStorage are client-controlled and are used here only to choose the mobile information architecture. They must never authorize API data or actions. The SSP-API independently verifies the bearer JWT and loads database-backed roles for every protected request.
+:::
+
+### `src/lib/session.ts`: helpers
 
 | Helper | Behavior |
 | :--- | :--- |
@@ -312,9 +316,13 @@ const { error: signUpError } = await supabase.auth.signUp({
 });
 ```
 
-Note the role downcast written to `user_metadata.role`: a player is stored as
+The role written to `user_metadata.role` is downcast: a player is stored as
 `"athlete"` (the backend `ApiRole`), which `getUserRole` later maps back to
 `"player"` for the UI.
+
+::: danger Email-confirmation gap
+The code destructures only `error` from `signUp`; it does not inspect the returned session. With Supabase Confirm Email enabled, sign-up can succeed while returning no session. The wizard still marks onboarding complete, attempts `api.updateMe` (which then fails locally without a bearer token), and routes into a role group. This flow is only complete when sign-up returns an authenticated session, or after the app adds an explicit "check your email" branch and confirmation/deep-link handling. This source audit did not inspect the live project's Confirm Email setting.
+:::
 
 ### Already-registered fallback
 
@@ -323,6 +331,8 @@ If `signUp` returns an error whose message contains `"already registered"` or
 `supabase.auth.signInWithPassword` with the same credentials. If the sign-in
 also fails, it throws a user-facing message instructing the user to check their
 password or log in from the main screen.
+
+That fallback is configuration-dependent: Supabase may return an obfuscated success response for an existing confirmed user when email confirmation is enabled, so the message-based branch is not a reliable account-existence check in every project configuration.
 
 ### Non-blocking `api.updateMe`
 
@@ -365,7 +375,7 @@ are labelled `(invite only)` and surface an invite-required Modal on continue.
 | `FadeIn` | Renders children un-animated. | `opacity 0→1, y 12→0`, tween `duration: 0.2` + `delay`. |
 | `MotionCard` | Plain `Pressable` (`min-h-12`). | Staggered entrance + tween scale-down on press (`scale: 0.97`). |
 | `ProgressBar` | `transition: { duration: 0 }`. | tween `duration: 0.2`. |
-| `ReduceMotionProvider` | Context flag from `AccessibilityInfo.isReduceMotionEnabled()`. | — |
+| `ReduceMotionProvider` | Context flag from `AccessibilityInfo.isReduceMotionEnabled()`. | None |
 
 The screen's `AnimatePresence` + `Motion.View` step transition uses
 `reduceMotion ? { duration: 0, type: "tween" } : { duration: 0.22, type: "tween" }`
@@ -377,7 +387,7 @@ The screen's `AnimatePresence` + `Motion.View` step transition uses
 
 Source: `src/lib/logout.ts`, `src/components/dashboard/LogoutSettingsRow.tsx`.
 
-### `logoutLocalSession(deps)` — failure-tolerant, navigate last
+### `logoutLocalSession(deps)`: failure-tolerant, navigate last
 
 ```ts
 export async function logoutLocalSession(deps: LogoutDependencies) {
@@ -392,8 +402,8 @@ export async function logoutLocalSession(deps: LogoutDependencies) {
 ```
 
 `Promise.allSettled` runs all four cleanup steps to completion regardless of
-rejections — a throwing `signOut` does not skip clearing the device demo state
-or the persisted role. **Navigation is deliberately last**, so the user never
+rejections. A throwing `signOut` does not skip clearing the device demo state
+or the persisted role. **Navigation is last**, so the user never
 sees the auth screen before local state is torn down. This ordering is enforced
 by `src/lib/logout.test.mjs` (navigate LAST, even if `signOut` throws).
 
@@ -423,16 +433,16 @@ A `locked` `useRef` guards against a double-trigger of the confirm button.
 The mobile app's only authentication concern is obtaining a Supabase JWT and
 attaching it as `Authorization: Bearer <token>` on every API call (see
 [API Client](./api-client) for the hand-rolled `fetch` client that does this).
-Everything beyond that — JWT verification with `jose`, live database role
+Everything beyond that (JWT verification with `jose`, live database role
 lookup, the five-role cascade, multi-tenant org/team boundaries, and the
-shared-secret internal routes — lives in the backend gateway:
+shared-secret internal routes) lives in the backend gateway:
 
-- [Backend Auth & Security](../backend/auth-and-security) — JWT verification,
+- [Backend Auth & Security](../backend/auth-and-security): JWT verification,
   `loadRoles`, `requireRoles`, cascade semantics, `hasOrgAccess` /
   `hasTeamAccess`, and the two auth modes.
-- [Backend Client Contract](../backend/client-contract) — the typed `AppType`
+- [Backend Client Contract](../backend/client-contract): the typed `AppType`
   contract the backend publishes. The mobile app does **not** consume
   `hono/client` / `AppType`; it hand-rolls `fetch` against the same paths.
-- [API Reference](../backend/api-reference) — the route contract `api.ts`
+- [API Reference](../backend/api-reference): the route contract `api.ts`
   maps onto, including `GET /me` (role resolution) and `PATCH /me`
   (non-blocking profile update).
