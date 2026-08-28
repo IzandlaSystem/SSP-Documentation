@@ -213,7 +213,7 @@ Minimum touch targets are **48 dp Android / 44 pt iOS**, enforced across the sha
 - gluestack `Button` base (`min-h-12`) and `icon` size (`min-w-12`).
 - `DeviceRow` single `Pressable` (`min-h-12`, `accessibilityRole="button"`).
 
-`brand-contract.test.mjs` asserts the auth Switch regex `<Switch[\s\S]*?accessibilityLabel="Remember me"[\s\S]*?className="min-h-12 min-w-12"`. The tab bar uses `NativeTabs tintColor="#003399"` (asserted by the contract).
+`brand-contract.test.mjs` asserts the auth Switch regex `<Switch[\s\S]*?accessibilityLabel="Remember me"[\s\S]*?className="min-h-12 min-w-12"`. Both role layouts use the shared `FloatingTabBar`, whose active icon and label use the semantic primary color.
 
 ### Recording dot: brand red, non-text only
 
@@ -236,7 +236,7 @@ The live-recording indicator in `src/features/tracker/FirmwareTrackerScreen.tsx`
 
 ### Navigation and screen chrome
 
-- Keep exactly **four `NativeTabs` destinations per role**: Coach: Home, Analytics, Squad, Profile; Player: Home, Analytics, Trainer, Profile. `ScreenHeader` supplies title/context plus optional 48 dp back or trailing actions. Do not create a second navigation system. See [Architecture & Navigation](./architecture).
+- Keep exactly **four `Tabs` destinations per role** behind the shared `FloatingTabBar`: Coach: Home, Analytics, Squad, Profile; Player: Home, Analytics, Trainer, Profile. `ScreenHeader` supplies title/context plus optional 48 dp back or trailing actions. See [Architecture & Navigation](./architecture).
 
 ### Cards and summaries
 
@@ -277,8 +277,8 @@ Two node `--test` files are the enforcement mechanism (see [Testing](./testing))
 
 | Test file | What it enforces |
 | :--- | :--- |
-| `src/components/dashboard/brand-contract.test.mjs` | All 14 CSS token triples, `SEMANTIC_COLORS` regex pin, no `34 197 94` / `#22C55E`, gluestack system-mode clearing, Lato loaded once (4 faces, no Figtree), shared primitives brand typography + 48 dp + no palette utilities, auth Switch `min-h-12`, avatar `bg-primary` (no `bg-green-`), `NativeTabs tintColor="#003399"`, `ssp-mark.png` sha256 pin. |
-| `src/components/dashboard/ux-truth-source.test.mjs` | No legacy green across 16 dashboard components, performance summary is one accessible summary (no decorative ring) + stacks at font scales, `DASHBOARD_MAX_FONT_SIZE_MULTIPLIER` applied, 112 px tab clearance, 48 dp headers/rows, status = icon + text + color (never color alone), device Demo disclosures, truthful missing states. |
+| `src/components/dashboard/brand-contract.test.mjs` | All 14 CSS token triples, `SEMANTIC_COLORS`, no legacy green/Figtree, gluestack system-mode clearing, Lato, shared primitives, 48 dp controls, `FloatingTabBar`, and the pinned `ssp-mark.png`. |
+| `src/components/dashboard/ux-truth-source.test.mjs` | No legacy green, accessible performance summaries, bounded font scaling, 112 px floating-tab clearance, 48 dp controls, icon/text/color status, API-backed player analytics, and truthful missing states. |
 
 ---
 

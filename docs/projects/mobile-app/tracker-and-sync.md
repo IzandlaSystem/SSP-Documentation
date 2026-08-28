@@ -36,6 +36,17 @@ flowchart LR
 
 > **Evidence boundary.** The service, parser, sync, and UI contracts are source- and unit-test verified. This audit did not establish a BLE connection, confirm the exact firmware revision, upload to a live backend, or validate a post-reset device. Treat those as runtime gates, not implied outcomes of the passing source tests.
 
+`TrackerProvider` no longer just relays the service's events into React state:
+it also serializes every BLE-touching call through a single **operation
+queue** (`operation-queue.ts`), runs background work — reconnect, session
+sync, A-GPS assist — through a **silent lane** that never surfaces as a
+user-facing error, and drives a **background sync engine**
+(`sync-engine.ts`) that keeps this phone's local session history and
+SSP-API in step with whatever the tracker is holding. See
+[TrackerProvider](#trackerprovider) and
+[Session history & background sync](#session-history-background-sync)
+below.
+
 ---
 
 ## Service layer
@@ -52,7 +63,7 @@ Source: `src/features/tracker/tracker-service.types.ts`,
 | :--- | :--- | :--- |
 | `DiscoveredTracker` | `{ id; name; rssi: number \| null }` | One scan result. |
 | `TrackerServiceEvents` | `onConnectionChange`, `onStatus`, `onLiveSample`, `onError` | Callbacks the provider wires to React state. |
-| `TrackerService` | `startScan`, `stopScan`, `connect`, `disconnect`, `startSession`, `stopSession`, `sendReferenceLocation`, `listSessions`, `downloadSession`, `destroy` | The full tracker surface. |
+| `TrackerService` | `startScan`, `stopScan`, `connect`, `disconnect`, `startSession`, `stopSession`, `sendReferenceLocation`, `listSessions`, `downloadSession`, `listFirmwareImages`, `uploadFirmwareImage`, `setFirmwareImageState`, `resetDevice`, `destroy` | The full tracker surface. The four `*Firmware*`/`resetDevice` members are the MCUmgr/SMP DFU surface (`tracker-service.ts` now imports `SmpClient` from `./dfu/smp-client`); see [BLE GATT Protocol](./ble-protocol) for the DFU characteristic layer. |
 | `TrackerServiceFactory` | `(events: TrackerServiceEvents) => TrackerService` | What the provider calls. |
 
 ### `NativeTrackerService`
@@ -129,13 +140,50 @@ flowchart TD
 
 ## TrackerProvider
 
-Source: `src/features/tracker/TrackerProvider.tsx`.
+Source: `src/features/tracker/TrackerProvider.tsx`, `operation-queue.ts`,
+`tracker-runtime-store.ts`, `use-auto-reconnect.ts`, `use-auto-assist-gps.ts`,
+`auto-connect-policy.ts`.
 
 `TrackerProvider` constructs one `TrackerService` (via `createTrackerService`,
 memoised) and exposes its events as React state. It wraps both the coach and
-player role groups (see [Architecture](./architecture)). The `run` helper sets a
-`busy` label and clears `error` around every async operation so the UI can show
-a single in-progress string and surface failures.
+player role groups (see [Architecture](./architecture)). Three things now run
+concurrently against that one service instance — a user tapping buttons, a
+background session-sync engine, and foreground auto-reconnect/auto-A-GPS — so
+the provider centers on making that safe rather than on the events-to-state
+mapping alone.
+
+### The BLE operation queue
+
+`tracker-service.ts` allows exactly one in-flight list/download/reference
+operation at a time and throws on a second concurrent call (see
+[Sequential operations](#nativetrackerservice) above). Once background sync
+can run at the same time as a user tap, two callers can reach the service at
+once, so `TrackerProvider` funnels every BLE-touching call through one
+`OperationQueue` (`createOperationQueue()`, memoised per provider instance):
+
+- `queue.run(task)` chains `task` onto a private promise tail; whatever the
+  previous task did — resolve or reject — the next task still runs, so one
+  failed sync step can never wedge the queue for everything queued behind it.
+- `connect()` and `disconnect()` deliberately **bypass** the queue (see
+  `runUnqueued` below): they must be able to pre-empt a slow queued download
+  rather than wait behind it.
+
+### Three execution lanes
+
+| Lane | Helper | Touches `busy`/`error`? | Goes through the queue? | Used by |
+| :--- | :--- | :--- | :--- | :--- |
+| User-facing, queued | `run(label, op)` | Yes — sets `busy`, clears then reports `error` | Yes | `startSession`, `stopSession`, `assistGps`, `listSessions`, non-silent `downloadSession`, the DFU methods |
+| Background, queued | `runSilent(op)` | **No** | Yes | Auto-reconnect's session-sync path, silent `downloadSession` calls, `assistGpsSilent` |
+| User-facing, unqueued | `runUnqueued(label, op)` | Yes | **No** | `scan`, `connect`, `disconnect` |
+
+`busy` and `error` are single global slots the UI treats as user-facing
+(buttons disable on `busy`; `error` renders as a destructive alert). Auto
+reconnect, background sync, and auto-A-GPS all call through `runSilent` (or,
+for auto-A-GPS's own permission/location step, run outside any lane) so a
+tracker that's merely out of range, or a background sync retry, never pops an
+error the user didn't ask about. Callers on the silent lane own their own
+failure handling — `runSync` records failures into the `sync` state, not
+`error`.
 
 ### Context state
 
@@ -145,27 +193,112 @@ a single in-progress string and surface failures.
 | `connectedDevice` | `DiscoveredTracker \| null` | `onConnectionChange`. |
 | `discoveredDevices` | `DiscoveredTracker[]` | Scan results, de-duped and sorted by RSSI desc. |
 | `status` | `TrackerStatus \| null` | `onStatus` (parsed `0x02`). |
-| `liveSample` | `LiveSample \| null` | `onLiveSample` (parsed `0x08`). |
+| `liveSample` | `LiveSample \| null` | `onLiveSample` (parsed `0x08`); GNSS mirrors immediately, IMU is throttled (see below). |
+| `lastImuSample` | `LiveImuSample \| null` | Last IMU sample, held separately so a fast IMU stream can't drown out the last GNSS fix. |
+| `lastGnssSample` | `LiveGnssSample \| null` | Last GNSS fix, held separately from the IMU stream. |
+| `liveSteps` | `number` | Running total from `LiveStepDetector`, fed every IMU packet; resets to 0 on `startSession()`. An estimate for live feedback, not the authoritative count (see `StoredSessionInfo.totalSteps`). |
 | `firmwareSessions` | `StoredSessionInfo[]` | Set after `listSessions`. |
+| `sessions` | `SessionListItem[]` | `mergeSessionSources(sessionIndex, firmwareSessions)` — the local index merged with the tracker's live list; see [Session history & background sync](#session-history-background-sync). Available while disconnected. |
 | `downloads` | `Record<number, ParsedFirmwareSession>` | Keyed by firmware session id. |
-| `busy` | `string \| null` | Label of the running operation. |
-| `error` | `string \| null` | Last error message. |
+| `dfuImages` | `DfuImageSlot[]` | MCUmgr image slots, refreshed by `listFirmwareImages()`; not cached client state. |
+| `dfuProgress` | `{ sent: number; total: number } \| null` | Set only while a firmware image upload is in flight. |
+| `busy` | `string \| null` | Label of the running user-facing operation (`run`/`runUnqueued` lanes only). |
+| `error` | `string \| null` | Last user-facing error message. |
+| `sync` | `SyncState` (`phase`, `completed`, `total`, `firmwareSessionId?`, `message?`, `lastRunAt?`) | Background sync-engine progress; never surfaced through `error`. |
+| `autoConnectTarget` | `string \| null` | BLE id `DeviceProvider` wants kept connected while the app is foregrounded; set via `setAutoConnectTarget`. |
+| `activeBleDeviceId` | `string \| null` | `connectedDevice?.id ?? autoConnectTarget` — the tracker whose `sessions`/`downloads` are currently in scope: the connected one, or the reconnect target while offline. Screens must check this before showing session data. |
 
 ### Methods
 
 | Method | What it does |
 | :--- | :--- |
-| `scan()` / `stopScan()` | Start/stop BLE scan; discovered devices accumulate sorted by RSSI. |
-| `connect(deviceId)` | Stop scan, then `service.connect`. |
-| `disconnect()` | `service.disconnect`. |
-| `startSession()` | `service.startSession` (writes `0x01`, waits for recording status). |
-| `stopSession()` | `service.stopSession` (writes `0x02`, waits for idle status). |
-| `assistGps()` | `expo-location` `requestForegroundPermissionsAsync` → `getCurrentPositionAsync({ accuracy: Balanced })` → `service.sendReferenceLocation`. Builds a `PhoneReferenceLocation` from the phone fix (altitude defaults to 0, accuracy to 100 m, `unixEpochSeconds` from the location timestamp, `timeUncertaintyMs: 1000`). |
-| `listSessions()` | `service.listSessions` → stores result in `firmwareSessions`. |
-| `downloadSession(sessionId)` | `service.downloadSession` → stores parsed session in `downloads[sessionId]`. |
+| `scan()` / `stopScan()` | Start/stop BLE scan (unqueued); discovered devices accumulate sorted by RSSI. |
+| `connect(deviceId)` | Unqueued. Clears `reconnectSuspended`, stops scan, then `service.connect`. |
+| `disconnect()` | Unqueued. Sets `reconnectSuspended = true` (see [Auto-reconnect](#auto-reconnect)), then `service.disconnect`. |
+| `startSession()` | Queued, user-facing. Resets the step detector, then `service.startSession` (writes `0x01`, waits for recording status). |
+| `stopSession()` | Queued, user-facing. `service.stopSession` (writes `0x02`, waits for idle status). |
+| `assistGps()` | Queued, user-facing. `expo-location` `requestForegroundPermissionsAsync` → `getCurrentPositionAsync({ accuracy: Balanced })` → `sendReferenceLocation`, which builds a `PhoneReferenceLocation` from the phone fix (altitude defaults to 0, accuracy defaults to 100 m and is floored at 1 m, `unixEpochSeconds` from the location timestamp, `timeUncertaintyMs: 1000`). |
+| `listSessions()` | Queued, user-facing. `service.listSessions` → stores result in `firmwareSessions`. |
+| `downloadSession(sessionId, { silent? })` | See [Download dedupe](#download-dedupe) below; queued (silent or user-facing depending on the flag) unless the answer comes from memory or disk, in which case it never touches the queue at all. |
+| `listFirmwareImages()` / `uploadFirmwareImage()` / `setFirmwareImageState()` / `resetDevice()` | Queued, user-facing. Thin wrappers over the matching `TrackerService` DFU methods; see [BLE GATT Protocol](./ble-protocol). |
 | `clearError()` | Clears the `error` field. |
+| `syncNow()` | Runs the background sync engine immediately; resolves when the run finishes. Same function the automatic trigger calls (see [Session history & background sync](#session-history-background-sync)). |
+| `refreshSessionIndex()` | Re-reads the local session index from AsyncStorage, e.g. after a manual upload wrote to it. |
+| `setAutoConnectTarget(bleDeviceId)` | Called by `DeviceProvider` with the one BLE id auto-reconnect, background sync, and auto-A-GPS should key off. |
+| `getImuSampleCount()` | Reads `TrackerRuntimeStore`'s raw IMU packet counter directly — deliberately **not** React state, so a 50 Hz stream can drive a live "pulse" indicator (`LivePulse.tsx`) without re-rendering the screen 50×/sec. |
+| `getLastActivityAt()` | Epoch ms of the last status or live packet, or `null`; same non-React-state rationale. |
 
 `useTracker()` reads the context and throws if used outside `TrackerProvider`.
+
+### Download dedupe
+
+`downloadSession(sessionId, { silent })` is shared by the user (opening a
+session row) and the background sync engine (downloading whatever's new), so
+the same session can be requested from two places within milliseconds of each
+other. `TrackerRuntimeStore` (`tracker-runtime-store.ts`) resolves it in a
+fixed order, checked once per call:
+
+```mermaid
+flowchart TD
+    Call["downloadSession(id)"] --> Completed{"In store.completedDownloads<br/>(this connection)?"}
+    Completed -->|yes| ReturnA["Resolve immediately"]
+    Completed -->|no| InFlight{"In store.inFlightDownloads?"}
+    InFlight -->|yes| Join["Join the same Promise<br/>(no BLE, no queue)"]
+    InFlight -->|no| Cache{"loadCachedSession(deviceId, id)<br/>hits AsyncStorage?"}
+    Cache -->|yes| ReturnB["Resolve from disk<br/>(no BLE, no queue)"]
+    Cache -->|no| Queue["run() or runSilent()<br/>-> service.downloadSession(id)<br/>-> cache to AsyncStorage"]
+```
+
+A fresh attempt is registered in `inFlightDownloads` *before* it awaits
+anything, so a second caller that arrives while the first is still resolving
+the disk cache — not just while it's mid-BLE-transfer — joins the same
+promise instead of hitting `tracker-service.ts`'s `"A session download is
+already running."` guard. The map entry is cleared on both success and
+failure. `completedDownloads` and `inFlightDownloads` are cleared whenever a
+*different* tracker connects (`TrackerRuntimeStore.attach()` reports the
+change), since firmware session ids are per-device.
+
+### Auto-reconnect
+
+Source: `use-auto-reconnect.ts`, backoff table in `auto-connect-policy.ts`.
+
+Foreground-only: `app.json` keeps BLE background mode off, so there's no
+OS-level background BLE to lean on. `useAutoReconnect` fires an attempt when
+**all** of these hold: a `targetBleDeviceId` is set (from `autoConnectTarget`),
+the tracker isn't already connected, reconnect isn't suspended, and the app is
+in the foreground (`AppState.currentState === "active"`). Delays come from
+`RECONNECT_BACKOFF_MS = [0, 3_000, 8_000, 15_000, 30_000, 60_000]` — the first
+attempt after a target appears is immediate, later attempts back off, and the
+last value repeats indefinitely for as long as the tracker stays unreachable.
+A successful connect resets the counter to 0; a failed attempt increments it
+(the tracker being out of range is the expected case, not an error). Returning
+to the foreground also resets the counter — a backlog built up while
+backgrounded shouldn't make the next attempt wait longer.
+
+**A user-initiated `disconnect()` suppresses this entirely**: it sets
+`reconnectSuspended = true` in `TrackerProvider`, and the effect's guard
+clause bails out while that flag is set. The suspension is cleared by any
+subsequent call to `connect()` — a manual reconnect, or `DeviceProvider`
+verifying a discovered device before pairing — so "Disconnect" means it until
+the user (or a pairing flow) explicitly connects again.
+
+### Auto-A-GPS
+
+Source: `use-auto-assist-gps.ts`, `shouldAssistGnss`/`AUTO_ASSIST_DELAY_MS` in
+`auto-connect-policy.ts`.
+
+`useAutoAssistGps` waits `AUTO_ASSIST_DELAY_MS` (6 s) after a connection
+appears, then silently sends a phone-derived reference location if the
+tracker's own GNSS is still working on a fix. It fires when: a device is
+connected, nothing is recording, this connection hasn't already been assisted
+(tracked per `connectedBleDeviceId` in a ref, reset on disconnect), and
+`gnssState` is `1` (Searching) or `3` (Timeout) — not `0` (Off, nothing to
+help) and not `2` (Fix, already has one). The 6 s delay exists so a tracker
+that's about to get a fix from its own recent ephemeris isn't pre-empted for
+no reason. `assistGpsSilent()` only uses **already-granted** location
+permission (`getForegroundPermissionsAsync`, never `requestForeground...`) and
+is a no-op if it isn't granted; it stays off `busy`/`error` and runs through
+`runSilent`. It fires at most once per connection.
 
 ---
 
@@ -306,22 +439,25 @@ GPS/UTC anchor (`unixEpochSeconds === 0`, "GPS/UTC time required").
 
 ## Tests
 
-The tracker feature has three test files, split across the two runners (see
-[Testing](./testing)).
+The tracker feature has 15 focused test files across the two runners (see
+[Testing](./testing)). The groups below summarize the coverage rather than
+duplicating every test case.
 
 | File | Runner | Covers |
 | :--- | :--- | :--- |
-| `src/features/tracker/protocol.test.ts` | vitest | All parsers, the v2 firmware file parse (magic `0x53535031`, 32-byte header, 17-byte records), `toTelemetryEnvelope`, and the refusal of a no-GPS-anchor session. |
-| `src/features/tracker/sync.test.ts` | vitest | The signed-upload flow: `createIngestUrl` → `uploadToSignedUrl` (with `firmware_session_id` in the body) → `completeIngest` with `sync_id` + `point_count`; returns 1 for a single-IMU-record session. |
-| `src/features/tracker/tracker-ui-source.test.mjs` | `node --test` | Source-contract: the eight state labels all appear, `formatElapsed` + connection quality + one primary action, `Session control` precedes `Live data`, brand red is confined to `backgroundColor: "#FF0000"` (no `text-[#FF0000]`/`color:`), secondary ops are explicit + disabled while busy + motion-free, elapsed resets on connection/recording loss, and device/API Pressables expose `blocked`. |
+| `protocol.test.ts`, `sync.test.ts` | vitest | Custom GATT parsers/file format/telemetry conversion and the signed-upload flow. |
+| `dfu/{cbor,smp}.test.ts` | vitest | CBOR and MCUmgr frame/image/reset contracts. |
+| `operation-queue`, `auto-connect-policy`, `tracker-runtime-store` | vitest | Serialized operations, reconnect/A-GPS decisions, dedupe and connection-scoped state. |
+| `session-index`, `session-list`, `session-track`, `geocode-cache`, `step-detector`, `sync-engine` | vitest | Cache/index/list/map behavior, step estimation, and background sync. |
+| `tracker-ui-source.test.mjs` | `node --test` | User-facing state truth, accessibility, busy/error lane separation, download joining, IMU throttling and status-verified connect. |
 
 ---
 
 ## Cross-references
 
-- [BLE GATT Protocol](./ble-protocol): characteristic table, parsers/builders,
-  and the implemented-vs-spec divergences (download `0x11` u16, no `0x03`
-  DELETE, no `0x07` DFU, 15-byte list entries).
+- [BLE GATT Protocol](./ble-protocol): custom characteristic formats and
+  divergences (download `0x11` u16, no DELETE, 15-byte list entries), plus the
+  separate standard MCUmgr/SMP firmware-update transport.
 - [API Client](./api-client): the hand-rolled `fetch` client
   (`createIngestUrl`, `uploadToSignedUrl` with no Bearer, `completeIngest`,
   `startSession`, `stopSession`, `listSessions`).

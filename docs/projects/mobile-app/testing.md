@@ -24,7 +24,7 @@ Source: `package.json` (`scripts.test`, `scripts.test:legacy`),
 
 > **Stale-CLAUDE.md note.** The mobile repo's `CLAUDE.md` claims there is "No
 > test runner". That is wrong. The dual runner below is wired in `package.json`
-> and `vitest.config.ts` and covers 18 test files. Cite those files, not
+> and `vitest.config.ts` and covers 33 test files. Cite those files, not
 > `CLAUDE.md`.
 
 ---
@@ -33,8 +33,8 @@ Source: `package.json` (`scripts.test`, `scripts.test:legacy`),
 
 | Runner | Files | What it asserts | Why it needs its own runner |
 | :--- | :--- | :--- | :--- |
-| `vitest run` | `src/**/*.test.ts` (4 files) | **Unit behavior**: import the module, call the function, assert on the returned value. | Needs ESM/TS transform + a mockable `fetch`. Vitest provides both; tests `vi.mock("./supabase")` and stub `fetchImpl`. |
-| `node --test` | `src/**/*.test.mjs` (14 files) | **Source-contract + behavioral facts**: read the source file as text, assert that specific strings, regexes, and structural facts hold (e.g. `assert.doesNotMatch(css, /34 197 94/)`, `assert.match(layout, /Figtree/) !== ...`). | Runs under plain Node so tests can `readFileSync` the source tree and grep it. No transform step, no module graph; the assertions are about what is on disk. |
+| `vitest run` | `src/**/*.test.ts` (16 files) | **Unit behavior**: protocol/API plus device bindings, queue/reconnect policy, cache/index/list/track, step detector, sync engine/runtime store, and MCUmgr CBOR/SMP. | Needs ESM/TS transform and mockable native/network boundaries. |
+| `node --test` | `src/**/*.test.mjs` (17 files) | **Source contracts + pure helpers**: source wiring, brand/UX truth, device/tracker UI, dashboard bucketing/geometry/history. | Plain Node can read source as text and import pure helpers without mounting React Native. |
 
 The `.test.mjs` suite is named "legacy" in the npm script only because it predates
 the vitest addition. It is not deprecated: it carries the highest-value
@@ -54,28 +54,32 @@ export default defineConfig({
 });
 ```
 
-The glob `src/**/*.test.ts` is what scopes vitest to the 4 unit-test files; the
+The glob `src/**/*.test.ts` scopes vitest to the 16 unit-test files; the
 `.mjs` source-contract files are never picked up by vitest because they do not
 match the `include` pattern. The `.worktrees/**` exclusion keeps agent worktree
 copies out of the run.
 
 ---
 
-## Vitest files (4)
+## Vitest files (16)
 
-These are the only files vitest runs. All four import the module under test and
-assert on real return values.
+These files import the module under test and assert on return values or controlled collaborators.
 
 | File | Scope |
 | :--- | :--- |
-| `src/lib/api.test.ts` | Hand-rolled fetch client: Bearer token attached, 401 when no Supabase session, `ApiError` on 403, `uploadToSignedUrl` sends **no** Bearer, and the full 28-method path+HTTP-method map. Mocks `./supabase` and a `fetchImpl`. |
+| `src/lib/api.test.ts` | Bearer/auth errors, signed upload, claim payload, and a 32-method path/verb map. The newer athlete analytics/goals methods are not yet in that map. |
 | `src/lib/api-session-adapter.test.ts` | Unit conversions (m→km, mps→kmh×3.6), `intensity` thresholds (`Max` ≥85, `High` ≥65, `Moderate` ≥35), `totalMetrics`, and `telemetryToHeatPoints` normalization. |
 | `src/features/tracker/protocol.test.ts` | Every BLE parser: `parseStatus`, `parseLiveSample` (IMU 21B / GNSS), `parseSessionListEntry` (15B + null), `parseSessionDownloadEvent`, `parseFirmwareSession` (v2 magic `0x53535031`), `buildReferenceLocationRequest` (23B), `parseReferenceLocationResult`, and `toTelemetryEnvelope` including the refusal of a no-GPS anchor (`unixEpochSeconds === 0`). |
 | `src/features/tracker/sync.test.ts` | `uploadFirmwareSession`: `createIngestUrl` → `uploadToSignedUrl` (no bearer) → `completeIngest`, returns point count. |
+| `src/features/tracker/dfu/{cbor,smp}.test.ts` | Minimal CBOR and MCUmgr SMP framing, image list/upload/state/reset request/response contracts. |
+| `src/features/tracker/{operation-queue,auto-connect-policy,tracker-runtime-store}.test.ts` | Serialized work, reconnect/A-GPS policy, download dedupe and connection-scoped runtime state. |
+| `src/features/tracker/{session-index,session-list,session-track,geocode-cache}.test.ts` | Persistent session metadata, merged lists, map tracks and cached place labels. |
+| `src/features/tracker/{step-detector,sync-engine}.test.ts` | Live step estimation and the background firmware-download/API-upload state machine. |
+| `src/features/devices/device-bindings.test.ts` | Per-user BLE bindings, app instance id and last-connected target persistence. |
 
 ---
 
-## node --test files (14)
+## node --test files (17)
 
 Each `.test.mjs` file is a Node test suite that reads source as text and/or
 imports pure modules. One-line summaries below; full descriptions live in the
@@ -84,17 +88,20 @@ relevant sibling doc.
 | File | One-line summary |
 | :--- | :--- |
 | `src/app/index-source.test.mjs` | `FORCE_DASHBOARD` routes coach home; otherwise the onboarding/remember/supabase session gate resolves role. |
-| `src/components/dashboard/brand-contract.test.mjs` | **Brand enforcement**: all 14 CSS/theme token triples, no `34 197 94` / `#22C55E`, no Figtree, gluestack system-mode clearing, shared-primitive brand typography + 48dp + no palette utilities, auth Switch `min-h-12`, avatar `bg-primary` (no `bg-green-`), NativeTabs `tintColor="#003399"`, `ssp-mark.png` sha256 pin. |
+| `src/components/dashboard/brand-contract.test.mjs` | Brand tokens, Lato, shared primitives, 48dp controls, semantic colors, floating tab bar, and the pinned SSP mark. |
+| `src/components/dashboard/athlete-analytics-bucketing.test.mjs` | Day/week/month athlete metric buckets, missing values, zone distribution and bucket-window inversion. |
+| `src/components/dashboard/charts/session-telemetry-bucketing.test.mjs` | Telemetry range filtering, intensity/load/distance buckets and drill-down window resolution. |
 | `src/components/dashboard/charts/time-series-chart.test.mjs` | Plot geometry finite for empty/one-point/flat/negative/normal data, cubic controls in-segment range, accessibility label (range/unit/extrema/latest/direction), latest comparison, both roles day/week/month datasets. |
 | `src/components/dashboard/coach-feedback.test.mjs` | Fixture length 3, dates newest-first, deterministic absolute dates (`"18 Jul 2026"`). |
 | `src/components/dashboard/dashboard-helpers.test.mjs` | `getProgressPercentage` clamps, `usesLargeTextLayout` at 1.5 + rejects NaN/Infinity, `buildPerformanceSummaryAccessibilityLabel` up/down/no-change with NaN/Infinity fallback. |
 | `src/components/dashboard/heatmap-density.test.mjs` | Invalid samples removed/clamped, nearby greater than isolated density, empty/single stable, dominant third / insight / peak percent, accessibility label. |
 | `src/components/dashboard/session-history-source.test.mjs` | Both analytics screens expose `SessionHistorySection` + `useApiSessions`, expansion/row accessibility, wrapper-rotation (not icon), detail bounded nav + heatmap legend + role metrics, SVG instance-scoped defs + markings on top, role routes stable + `router.replace` (no `router.back`), semantic blue→red density, session detail preserves API UUID + truthful missing states. |
 | `src/components/dashboard/session-history.test.mjs` | Fixture length 4, ordered earliest to latest, valid ISO timestamps, duration greater than 0, gpsPoints 0 to 1 normalized, adjacent-nav boundaries, newest-first sort, role metric selection (coach=teamMetrics, player=playerMetrics). |
-| `src/components/dashboard/ux-truth-source.test.mjs` | **Truthfulness gate**: coach mail `Linking.canOpenURL/openURL` + catch + Alert + 48dp, remember-me one Switch no Pressable, auth `signInWithPassword` + `getMe` + shared `LogoutSettingsRow`, device Demo disclosure ("no hardware contacted"), organisation InfoRow "Not connected" no onPress, weekly goals read-only 48dp no Save, `AccountStep` `supabase.signUp`, dashboard semantic canvas + SVG colors, 112px tab clearance, performance summary one accessible summary no decorative ring + stacks at font scales, player home bounded text + `DASHBOARD_MAX_FONT_SIZE_MULTIPLIER`, `DeviceReadinessCard` presentational, readiness row alignment + status icons, coach/player home order, 48dp headers/rows, `PowerScoreRing` trend badge, no legacy green constants, squad/trainer truthful searchable lists, people rows one status no fake actions, team/organisation non-interactive explanatory, logout failure-tolerant local, role boundaries + `DevRoleSwitcher` disabled. |
+| `src/components/dashboard/ux-truth-source.test.mjs` | Truthful actions/data, API-backed auth and player analytics, accessibility, floating-tab clearance, logout ordering, and role boundaries. |
+| `src/components/dashboard/weekly-performance.test.mjs` | Current-vs-prior week score, missing workload handling and zero-session behavior. |
 | `src/components/onboarding/onboarding-brand-source.test.mjs` | Entry + auth use `ssp-mark` (no ShieldCheck), auth guards concurrent sign-in + truthful copy, onboarding header SSP identity once, primary/secondary actions wired + dashboard bypass dev-only, carousel replaces legacy icon hero, form labels/errors/password accessible, motion bounded + ReduceMotion (duration 0.2, no spring), choice cards + progress dots 48dp. |
 | `src/features/devices/device-state.test.mjs` | Exhaustive reducer/selector coverage: coach vs player visibility, readiness states, priority, add/assign/rename/sync/update/connect/disconnect/unlink determinism, duplicate-pairing failure, `sessionCleared`, capacity/battery clamps, bulk selectors, assignment labels, operation labels, attention reasons, activity uniqueness/newest-first. |
-| `src/features/devices/device-ui-source.test.mjs` | Mock-only import enforcement (no `react-native-ble-plx`/supabase/async-storage in `src/features/devices/**`), 48dp buttons, accessibility props, Demo disclosures, role wrappers, checkout-relative imports (no `@/features/devices`), fixtures coverage, bulk preview disclosure, `DemoModeBanner`, status badges, `DeviceRow` single Pressable, `SessionCapacity` guards, `AddDeviceScreen` 3 steps + `usePreventRemove` + `ExitIntent` + pairing result, `FirmwareUpdateSheet` state machine, provider timer cancellation + coach-only assignment. |
+| `src/features/devices/device-ui-source.test.mjs` | Live provider/claim/scan/actions, no Demo provider, role-safe routes, pairing wizard, 48dp/accessibility, disconnected session visibility, telemetry/session rows/maps, and firmware-panel truth. |
 | `src/features/tracker/tracker-ui-source.test.mjs` | Live tracking state labels + elapsed + connection quality + one primary action, brand red non-text only (`backgroundColor: "#FF0000"`, no `text-[#FF0000]` / `color:`), secondary ops disabled + motion-free, elapsed resets on connection/recording loss, device/API Pressables expose blocked state. |
 | `src/lib/logout.test.mjs` | Logout attempts every cleanup, navigate LAST (`allSettled`, even if `signOut` throws). |
 
@@ -128,8 +135,8 @@ text. If any of the following regress, `npm test` fails:
   `SEMANTIC_COLORS` object is matched by a single multi-line regex, and the
   gluestack provider's `mode === "system" ? "unspecified" : mode` +
   `Appearance.setColorScheme(resolvedMode)` clearing behavior is pinned.
-- **NativeTabs brand.** `tintColor="#003399"` on both coach and player tab
-  layouts. Shared primitives (text/heading/button/card) must use brand typography
+- **Floating navigation brand.** Both role layouts must use `FloatingTabBar`,
+  with the SSP mark and semantic colors pinned. Shared primitives must use brand typography
   classes and must NOT contain hardcoded hex or palette utilities
   (`bg-green-`, `bg-white`, `bg-black`, etc.).
 
@@ -147,13 +154,11 @@ data presented as real, no demo actions presented as live hardware. Highlights:
   ("Team settings are read-only in SSP", "Not available in SSP"); the squad
   weekly-goals modal is read-only with no Save button; `DevRoleSwitcher` returns
   `null` (disabled).
-- **Mock disclosures.** The device flow must disclose "no hardware was
-  contacted" (see [Device Management](./devices)); the organisation InfoRow must
-  show "Not connected" with no `onPress`.
-- **Real API data only where claimed.** Session history uses
-  `useApiSessions`/`useApiSession`; profile uses `useApiMe`; analytics charts use
-  empty `MOCK_*` arrays (not API-fed); the test enforces that dashboard
-  components do not import green constants or present mock arrays as live data.
+- **Real hardware claims only where wired.** Device screens must use the live
+  provider, scan/claim/actions and cannot contain the old Demo disclosures.
+- **Real API data only where claimed.** Session history/profile and player
+  analytics/goals are API-backed. Coach analytics and the remaining placeholder
+  cards remain explicitly mock/empty.
 - **Auth + logout wiring.** `supabase.auth.signInWithPassword` +
   `api.getMe()` + shared `LogoutSettingsRow`; `logoutLocalSession` runs
   `Promise.allSettled` and navigates to `/auth` LAST, even if `signOut` throws.
@@ -181,16 +186,15 @@ typecheck script).
 | `npx expo run:ios` | Build + launch an iOS **development build** on a simulator or connected device. | Required for real BLE (`react-native-ble-plx` native module). See [Configuration & Build](./configuration). |
 | `npx expo run:android` | Build + launch an Android **development build** on an emulator or connected device. | Required for real BLE on Android. |
 
-### Verified baseline: 2026-08-15
+### Verified baseline: 2026-08-28
 
-Checked on branch `codex/phase0-contracts` at commit `e755d64e8cc4f9c5b0dee7b889f0147c96be12c6`, including the pre-existing local mobile changes documented on the [Overview](./):
+Checked in the `worktree-live-ble` worktree at commit `6814766`, including its current uncommitted mobile changes documented on the [Overview](./):
 
 | Gate | Result | Evidence |
 | :--- | :--- | :--- |
-| `npm test` | **Pass** | 4/4 Vitest files, 15/15 Vitest tests; 14 Node files, 149/149 Node tests. Node emitted non-fatal `MODULE_TYPELESS_PACKAGE_JSON` warnings for imported `.ts` helper modules. |
-| `npx tsc --noEmit` | **Fail** | 13 reported errors: generated UI primitive typing, two implicit-`any` profile callbacks, and `auth.tsx` role inference (`"athlete"` against `never`). |
-| `npm run lint` | **Fail** | 140 problems: 73 errors and 67 warnings. Most are in generated/unused `components/ui` modules, including unresolved optional imports and React hook/compiler rules; one warning is in `DevRoleSwitcher.tsx`. |
-| `npm ls --depth=0` | **Not clean** | Reports five extraneous transitive WASM packages in `node_modules`; the declared top-level dependencies are otherwise installed. |
+| `npm test` | **Pass** | 16 Vitest files / 107 tests; 17 Node files / 128 tests. Node emitted non-fatal `MODULE_TYPELESS_PACKAGE_JSON` warnings for imported `.ts` helpers. |
+| `npx tsc --noEmit` | **Fail** | 12 errors: ten generated Gluestack primitive typing errors and two route-to-prop errors where coach/player Device Hub routes still pass removed `onOpenFirmware` props. |
+| `npm run lint` | **Fail** | 145 problems: 72 errors and 73 warnings. Most are generated `components/ui` imports/hooks/compiler findings; app-source warnings also remain in `DeviceProvider`, device session detail, athlete analytics, and `DevRoleSwitcher`. |
 | Simulator / signed build | **Not run** | No iOS/Android runtime, navigation, permission, or packaging proof in this audit. |
 | Live Supabase / SSP-API | **Not run** | No authenticated environment, live database, storage upload, or deployment smoke test. |
 | Physical SSP-S1 BLE | **Not run** | No scan, bond, GATT operation, recording, download, A-GPS acknowledgement, or device reboot proof. |
@@ -211,11 +215,11 @@ A passing `npm test` therefore proves the documented unit/source contracts only.
   rules that `brand-contract.test.mjs` enforces.
 - [Dashboard & Analytics](./dashboard-and-analytics): the mock-vs-real data
   distinction that `ux-truth-source.test.mjs` guards.
-- [Device Management](./devices): the Demo-mode disclosures enforced by
+- [Device Management](./devices): the live provider, action and truthfulness contracts enforced by
   `device-ui-source.test.mjs`.
 - [Live Tracking & Sync](./tracker-and-sync): the tracker UI labels and
   brand-red recording dot enforced by `tracker-ui-source.test.mjs`.
-- [API Client](./api-client): the 28-method fetch contract verified by
+- [API Client](./api-client): the current fetch surface and the endpoint-map coverage gap in
   `src/lib/api.test.ts`.
 - [Configuration & Build](./configuration): env vars, EAS build profiles, and
   the dev-build requirement for BLE.
