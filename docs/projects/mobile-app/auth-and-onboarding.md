@@ -393,7 +393,7 @@ Source: `src/lib/logout.ts`, `src/components/dashboard/LogoutSettingsRow.tsx`.
 export async function logoutLocalSession(deps: LogoutDependencies) {
   await Promise.allSettled([
     deps.signOut(),
-    deps.clearDevices(),
+    deps.clearDeviceSession(),
     deps.clearUserRole(),
     deps.clearOnboardingComplete(),
   ]);
@@ -402,8 +402,8 @@ export async function logoutLocalSession(deps: LogoutDependencies) {
 ```
 
 `Promise.allSettled` runs all four cleanup steps to completion regardless of
-rejections. A throwing `signOut` does not skip clearing the device demo state
-or the persisted role. **Navigation is last**, so the user never
+rejections. A throwing `signOut` does not skip disconnecting the tracker and
+clearing this phone's device bindings or the persisted role. **Navigation is last**, so the user never
 sees the auth screen before local state is torn down. This ordering is enforced
 by `src/lib/logout.test.mjs` (navigate LAST, even if `signOut` throws).
 
@@ -420,7 +420,7 @@ The row is reused on both coach and player profile screens. It renders a
 | Cancel button | `variant="outline"`, disabled while `loggingOut`. |
 | Confirm button | `variant="destructive"`, label flips to `"Signing out…"`. |
 | `signOut` | `() => supabase.auth.signOut({ scope: "local" })` |
-| `clearDevices` | `useDeviceDemo().clearDevices` (demo device state). |
+| `clearDeviceSession` | `useDevices().clearDeviceSession`: disconnects the active tracker, clears the auto-connect target, removes this phone's BLE bindings for the signed-in user, and clears the provider's local inventory state. It does not delete backend device records. |
 | `clearUserRole` / `clearOnboardingComplete` | from `src/lib/session.ts` / `src/lib/onboarding.ts`. |
 | `navigateToAuth` | `() => router.replace("/auth")` |
 

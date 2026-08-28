@@ -68,6 +68,8 @@ The app icon and the Android adaptive-icon foreground are both `./assets/brand/s
 | `expo-router` | (none) | (none) |
 | `react-native-ble-plx` | `{ isBackgroundEnabled: false, modes: ["central"], bluetoothAlwaysPermission: "Allow SSP Mobile App to connect to your SSP tracker." }` | iOS Bluetooth usage description |
 | `expo-location` | `{ locationWhenInUsePermission: "Allow SSP Mobile App to use your location to help the tracker acquire GPS faster." }` | iOS location usage description |
+| `@maplibre/maplibre-react-native` | (none) | Native map support used by recorded-session detail |
+| `./plugins/with-async-storage-size` | local config plugin | Raises the Android AsyncStorage database limit for cached session payloads/indexes |
 
 `expo-location` is used by `TrackerProvider.assistGps` to acquire the phone's current position and send it to the SSP-S1 as a reference-location A-GPS fix. See [Tracker & Sync](./tracker-and-sync).
 
@@ -130,6 +132,8 @@ Source: `.env.example` as the committed template, plus the static `process.env.E
 ### Important: all `EXPO_PUBLIC_*` values are public and inlined into the JS bundle
 
 Expo CLI statically replaces these references while bundling JavaScript. In local development, edit the env value and perform a full reload of the development build; a native rebuild is only required when native code/config changes. Production binaries or immutable updates must be rebuilt/re-exported to embed changed values. `EXPO_PUBLIC_*` values are visible in the compiled app, so they must never contain secrets. `.env.example` is a committed template, not a runtime file and not proof of the values used by a deployed build.
+
+Local `.env.local` is gitignored and is not automatically a production EAS environment. Before a preview or production build, verify that the selected EAS environment contains `EXPO_PUBLIC_SUPABASE_URL`, a publishable/anon key, and the intended API URL. Missing Supabase public values cause `src/lib/supabase.ts` to throw during app startup. Never place a Supabase secret or `service_role` key in an `EXPO_PUBLIC_*` variable.
 
 ### `EXPO_PUBLIC_FORCE_DASHBOARD`: referenced in code, not in `.env.example`
 
@@ -232,7 +236,7 @@ Only `@tailwindcss/postcss` is registered: no `autoprefixer`, no `postcss-preset
 | Expo Go | `undefined` | `FallbackTrackerService` | No |
 | Web | `undefined` | `WebTrackerService` (throws) | No |
 
-For any work that touches the SSP-S1 tracker (live tracking, session download, A-GPS assist, firmware session upload), use a **development build**, not Expo Go. `npx expo start` (no `--dev-client`) is fine for web-only / non-BLE UI iteration. See [Tracker & Sync](./tracker-and-sync) for the `TrackerService` interface and the fallback behavior.
+For any work that touches the SSP-S1 tracker (pairing, live tracking, session download, A-GPS assist, upload, or MCUmgr firmware update), use a **development build**, not Expo Go. `npx expo start` is fine for web-only / non-BLE UI iteration. See [Tracker & Sync](./tracker-and-sync) for the service and fallback behavior.
 
 ---
 

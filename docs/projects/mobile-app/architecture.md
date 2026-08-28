@@ -66,7 +66,7 @@ Each role group layout exports `unstable_settings = { initialRouteName: "(tabs)"
 
 ## Route Tree
 
-The full route tree, with file paths relative to the mobile repo root. Group `_layout.tsx` files apply the role guard and wrap their screens in `TrackerProvider` + `DeviceDemoProvider`; the `(tabs)/_layout.tsx` files declare the native tab bar.
+The full route tree, with file paths relative to the mobile repo root. Group `_layout.tsx` files apply the role guard and wrap their screens in `TrackerProvider` + `DeviceProvider`; the `(tabs)/_layout.tsx` files declare Expo Router `Tabs` with the custom floating presentation.
 
 ### Top-level routes
 
@@ -79,11 +79,11 @@ The full route tree, with file paths relative to the mobile repo root. Group `_l
 
 ### Coach group `(coach)`
 
-Layout: `src/app/(coach)/_layout.tsx`. `useRoleGuard("coach")`, `unstable_settings.initialRouteName: "(tabs)"`, wraps in `TrackerProvider` > `DeviceDemoProvider role="coach"` > `Stack` (`headerShown: false`).
+Layout: `src/app/(coach)/_layout.tsx`. `useRoleGuard("coach")`, `unstable_settings.initialRouteName: "(tabs)"`, wraps in `TrackerProvider` > `DeviceProvider role="coach"` > `Stack` (`headerShown: false`).
 
 | Route | File | Screen component |
 | :--- | :--- | :--- |
-| `/(coach)/(tabs)` | `src/app/(coach)/(tabs)/_layout.tsx` | NativeTabs (home/analytics/squad/profile) |
+| `/(coach)/(tabs)` | `src/app/(coach)/(tabs)/_layout.tsx` | Tabs + `FloatingTabBar` (home/analytics/squad/profile) |
 | `/(coach)/(tabs)/home` | `src/app/(coach)/(tabs)/home.tsx` | `CoachHomeScreen` |
 | `/(coach)/(tabs)/analytics` | `src/app/(coach)/(tabs)/analytics.tsx` | Coach analytics |
 | `/(coach)/(tabs)/squad` | `src/app/(coach)/(tabs)/squad.tsx` | Squad list |
@@ -93,16 +93,17 @@ Layout: `src/app/(coach)/_layout.tsx`. `useRoleGuard("coach")`, `unstable_settin
 | `/(coach)/device/add` | `src/app/(coach)/device/add.tsx` | `AddDeviceScreen role="coach"` |
 | `/(coach)/device/firmware` | `src/app/(coach)/device/firmware.tsx` | `FirmwareTrackerScreen` |
 | `/(coach)/device/[id]` | `src/app/(coach)/device/[id].tsx` | `DeviceDetailsScreen role="coach"` |
+| `/(coach)/device/[id]/session/[sessionId]` | `src/app/(coach)/device/[id]/session/[sessionId].tsx` | `DeviceSessionDetailScreen role="coach"` |
 | `/(coach)/team` | `src/app/(coach)/team.tsx` | Read-only team details |
 | `/(coach)/organisation` | `src/app/(coach)/organisation.tsx` | Read-only org details |
 
 ### Player group `(player)`
 
-Layout: `src/app/(player)/_layout.tsx`. `useRoleGuard("player")`, `unstable_settings.initialRouteName: "(tabs)"`, wraps in `TrackerProvider` > `DeviceDemoProvider role="player"` > `Stack` (`headerShown: false`). The player tab group uses `dashboard` as the route name (with the label "Home") rather than `home`.
+Layout: `src/app/(player)/_layout.tsx`. `useRoleGuard("player")`, `unstable_settings.initialRouteName: "(tabs)"`, wraps in `TrackerProvider` > `DeviceProvider role="player"` > `Stack` (`headerShown: false`). The player tab group uses `dashboard` as the route name (with the label "Home") rather than `home`.
 
 | Route | File | Screen component |
 | :--- | :--- | :--- |
-| `/(player)/(tabs)` | `src/app/(player)/(tabs)/_layout.tsx` | NativeTabs (dashboard/analytics/trainer/profile) |
+| `/(player)/(tabs)` | `src/app/(player)/(tabs)/_layout.tsx` | Tabs + `FloatingTabBar` (dashboard/analytics/trainer/profile) |
 | `/(player)/(tabs)/dashboard` | `src/app/(player)/(tabs)/dashboard.tsx` | `PlayerDashboardScreen` |
 | `/(player)/(tabs)/analytics` | `src/app/(player)/(tabs)/analytics.tsx` | Player analytics |
 | `/(player)/(tabs)/trainer` | `src/app/(player)/(tabs)/trainer.tsx` | Trainer / today's session |
@@ -112,8 +113,13 @@ Layout: `src/app/(player)/_layout.tsx`. `useRoleGuard("player")`, `unstable_sett
 | `/(player)/device/add` | `src/app/(player)/device/add.tsx` | `AddDeviceScreen role="player"` |
 | `/(player)/device/firmware` | `src/app/(player)/device/firmware.tsx` | `FirmwareTrackerScreen` |
 | `/(player)/device/[id]` | `src/app/(player)/device/[id].tsx` | `DeviceDetailsScreen role="player"` |
+| `/(player)/device/[id]/session/[sessionId]` | `src/app/(player)/device/[id]/session/[sessionId].tsx` | `DeviceSessionDetailScreen role="player"` |
 | `/(player)/team` | `src/app/(player)/team.tsx` | Read-only team details |
 | `/(player)/organisation` | `src/app/(player)/organisation.tsx` | Read-only org details |
+
+::: warning Legacy firmware route is currently disconnected
+Both role stacks still register `device/firmware`, but Device Hub's route wrappers still pass a removed `onOpenFirmware` prop. The current device UI exposes `FirmwareUpdatePanel` inside a connected device's Details screen instead. This mismatch is one of the two app-source TypeScript errors recorded in [Testing](./testing).
+:::
 
 ## Entry Gate Flow
 
@@ -179,31 +185,31 @@ The hook uses an `active` flag cleaned up in the effect's return, so a rapid unm
 
 This guard is an information-architecture convenience, **not an authorization boundary**. Its fallback can read user-editable Supabase `user_metadata` or local AsyncStorage. The SSP-API must continue to authorize every request from its verified JWT and database-backed roles; changing a local role can only affect which mobile screens are attempted.
 
-## Native Tabs per Role
+## Tabs per Role
 
 Source: `src/app/(coach)/(tabs)/_layout.tsx`, `src/app/(player)/(tabs)/_layout.tsx`.
 
-Both tab bars use `NativeTabs` from `expo-router/unstable-native-tabs` with identical chrome: `tintColor="#003399"` (brand primary blue), `labelVisibilityMode="labeled"`, and `disableTransparentOnScrollEdge`. Each trigger declares an SF Symbol (iOS) and a Material icon (Android) plus a label. The tab trigger `name` must match a sibling route file under `(tabs)/`.
+Both role layouts use Expo Router's standard `Tabs` navigator with `headerShown: false` and pass `FloatingTabBar` as the `tabBar` renderer. The floating pill consumes React Navigation's `state`, `descriptors`, and `navigation`, emits `tabPress`/`tabLongPress`, and maps the route filename to a Lucide icon. Focus is brand blue; each tab has a 48-point minimum target and the scrolling screens reserve 112 px beneath their content.
 
 ### Coach tabs
 
-| # | `name` | Label | SF Symbol (default / selected) | Material icon |
-| :-: | :--- | :--- | :--- | :--- |
-| 1 | `home` | Home | `house` / `house.fill` | `home` |
-| 2 | `analytics` | Analytics | `chart.bar` / `chart.bar.fill` | `analytics` |
-| 3 | `squad` | Squad | `person.3` / `person.3.fill` | `groups` |
-| 4 | `profile` | Profile | `person.crop.circle` / `person.crop.circle.fill` | `account_circle` |
+| # | `name` | Label | Icon |
+| :-: | :--- | :--- | :--- |
+| 1 | `home` | Home | `Home` |
+| 2 | `analytics` | Analytics | `ChartBar` |
+| 3 | `squad` | Squad | `Users` |
+| 4 | `profile` | Profile | `CircleUserRound` |
 
 ### Player tabs
 
-| # | `name` | Label | SF Symbol (default / selected) | Material icon |
-| :-: | :--- | :--- | :--- | :--- |
-| 1 | `dashboard` | Home | `house` / `house.fill` | `home` |
-| 2 | `analytics` | Analytics | `chart.bar` / `chart.bar.fill` | `analytics` |
-| 3 | `trainer` | Trainer | `dumbbell` / `dumbbell.fill` | `fitness_center` |
-| 4 | `profile` | Profile | `person.crop.circle` / `person.crop.circle.fill` | `account_circle` |
+| # | `name` | Label | Icon |
+| :-: | :--- | :--- | :--- |
+| 1 | `dashboard` | Home | `Home` |
+| 2 | `analytics` | Analytics | `ChartBar` |
+| 3 | `trainer` | Trainer | `Dumbbell` |
+| 4 | `profile` | Profile | `CircleUserRound` |
 
-The player's first tab is the route `dashboard` (file `src/app/(player)/(tabs)/dashboard.tsx`) but is labeled "Home" in the UI. The coach's first tab is the route `home` (file `src/app/(coach)/(tabs)/home.tsx`). Both point at brand blue `#003399`.
+The player's first tab is the route `dashboard` but is labeled "Home" in the UI. The coach's first tab is the route `home`. `FloatingTabBar` keys its icon map by these route filenames, so the player `dashboard` and coach `home` both map to `Home`.
 
 ## Navigation Conventions
 
@@ -246,7 +252,7 @@ This is **enforced** by `src/components/dashboard/session-history-source.test.mj
 
 ## Provider / Component Dependency Diagram
 
-The diagram below shows how the providers, screens, and services compose at runtime. The root `ThemeProvider` wraps `AppShell`; each role group adds `TrackerProvider` (real BLE, `src/features/tracker/`) and `DeviceDemoProvider` (demo/mock device feature, `src/features/devices/`) around its `Stack`. Screens consume those contexts plus the data hooks (`useApiMe`, `useApiSessions`, `useApiSession`) and the hand-rolled `api.ts` fetch client. Supabase is used directly for auth only; all data reads/writes go through the SSP-API gateway.
+The diagram below shows how the providers, screens, and services compose at runtime. `TrackerProvider` owns the BLE connection, cache, reconnect and sync engine. `DeviceProvider` overlays SSP-API inventory and per-phone BLE bindings. Screens consume those contexts plus API-backed hooks. Supabase is used directly for auth only; data reads and writes go through SSP-API.
 
 ```mermaid
 flowchart TB
@@ -266,20 +272,20 @@ flowchart TB
     subgraph CoachGroup["(coach) group _layout.tsx"]
         GuardC["useRoleGuard('coach')"]
         TrackC["TrackerProvider<br/><i>real BLE context</i>"]
-        DemoC["DeviceDemoProvider role='coach'<br/><i>demo/mock devices</i>"]
-        CoachStack["Stack<br/>(tabs) · session/[id] · device · device/add · device/firmware · device/[id] · team · organisation"]
-        GuardC --> TrackC --> DemoC --> CoachStack
+        DeviceC["DeviceProvider role='coach'<br/><i>inventory + BLE bindings</i>"]
+        CoachStack["Stack<br/>(tabs) · session/[id] · device routes · team · organisation"]
+        GuardC --> TrackC --> DeviceC --> CoachStack
     end
 
     subgraph PlayerGroup["(player) group _layout.tsx"]
         GuardP["useRoleGuard('player')"]
         TrackP["TrackerProvider"]
-        DemoP["DeviceDemoProvider role='player'"]
-        PlayerStack["Stack<br/>(tabs) · session/[id] · device · device/add · device/firmware · device/[id] · team · organisation"]
-        GuardP --> TrackP --> DemoP --> PlayerStack
+        DeviceP["DeviceProvider role='player'"]
+        PlayerStack["Stack<br/>(tabs) · session/[id] · device routes · team · organisation"]
+        GuardP --> TrackP --> DeviceP --> PlayerStack
     end
 
-    subgraph Tabs["NativeTabs (tintColor #003399)"]
+    subgraph Tabs["Tabs + FloatingTabBar"]
         CoachTabs["Coach: home · analytics · squad · profile"]
         PlayerTabs["Player: dashboard(Home) · analytics · trainer · profile"]
     end
@@ -301,8 +307,8 @@ flowchart TB
     Index -- "role tab" --> CoachGroup & PlayerGroup
     CoachStack --> CoachTabs
     PlayerStack --> PlayerTabs
-    CoachStack & PlayerStack -- "useApiMe / useApiSessions / useApiSession" --> Api
-    CoachStack & PlayerStack -- "useDeviceDemo" --> DemoC & DemoP
+    CoachStack & PlayerStack -- "API hooks" --> Api
+    CoachStack & PlayerStack -- "useDevices" --> DeviceC & DeviceP
     CoachStack & PlayerStack -- "useTracker" --> TrackC & TrackP
     Auth & Index & GS -- "supabase.auth" --> Supabase
     TrackC & TrackP --> TrackerSvc
@@ -314,9 +320,9 @@ flowchart TB
 ## Cross-References
 
 - [Mobile App Overview](./): product summary, stack table, current state (mocked vs real).
-- [API Client](./api-client): the hand-rolled `fetch` client, types, and 28-method endpoint table.
+- [API Client](./api-client): the hand-rolled `fetch` client and its current gateway surface.
 - [Auth & Onboarding](./auth-and-onboarding): Supabase sign-in, the onboarding carousel, and the get-started wizard.
-- [Devices](./devices): the demo/mock device feature (`DeviceDemoProvider`, `DeviceHubScreen`, `AddDeviceScreen`).
+- [Devices](./devices): live device inventory, pairing, bindings, telemetry, sessions, and DFU.
 - [Tracker & Sync](./tracker-and-sync): real BLE tracking via `TrackerProvider` and `NativeTrackerService`.
 - [Dashboard & Analytics](./dashboard-and-analytics): what each coach/player tab screen renders.
 - [Design System](./design-system): brand colors, Lato typography, SEMANTIC_COLORS, 48dp touch targets.

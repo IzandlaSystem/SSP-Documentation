@@ -1,6 +1,6 @@
 ---
 title: API Client & Data Layer
-description: The SSP Mobile App's hand-rolled fetch client, its 28 gateway endpoints, the session adapter, Supabase setup, and the data hooks that carry real API data.
+description: The SSP Mobile App's hand-rolled fetch client, 35 authenticated gateway methods, signed telemetry upload, Supabase auth setup, adapters, and data hooks.
 outline: deep
 ---
 
@@ -10,12 +10,12 @@ outline: deep
 The SSP Mobile App talks to [SSP-API](../backend/index) through a **hand-rolled `fetch` client** in [`src/lib/api.ts`](https://github.com/IzandlaSystem/SSP-Mobile-App/blob/main/src/lib/api.ts): `createApiClient({ baseUrl, getAccessToken, fetchImpl })`. It is **NOT** Hono `hc()`, **NOT** `hono/client`, and there is **NO `AppType` contract import**. The backend *publishes* an `AppType` contract (see [Backend Client Contract](../backend/client-contract)); the mobile app does **not currently consume it**. The only `createClient` in this repo is `@supabase/supabase-js`'s auth client in `src/lib/supabase.ts`. The mobile app calls the same gateway paths as the typed web client through its own fetch wrapper.
 :::
 
-This page covers the client factory, the `request<T>` engine, the `ApiError` class, the exported `api` singleton and its default `baseUrl`/`getAccessToken`, the response types, the 28-method endpoint surface, `uploadToSignedUrl` (the one no-bearer call), the `api-session-adapter` conversions, the Supabase client setup, and the three React hooks that carry real API data into the UI.
+This page covers the client factory, the `request<T>` engine, the `ApiError` class, the exported singleton, the 35 authenticated gateway methods, `uploadToSignedUrl` (the one no-bearer call), response adapters, Supabase auth setup, and the hooks that carry real data into the UI.
 
 ```mermaid
 flowchart LR
     subgraph Mobile["SSP-Mobile-App"]
-        Hooks["useApiMe<br/>useApiSessions / useApiSession<br/>useRoleGuard"]
+        Hooks["Profile · sessions · devices<br/>athlete analytics · goals · telemetry"]
         Api["api (createApiClient)<br/>src/lib/api.ts<br/>hand-rolled fetch"]
         Adapter["api-session-adapter<br/>apiSessionToTrainingSession<br/>metricView · totalMetrics · intensity<br/>telemetryToHeatPoints"]
         Supa["supabase<br/>src/lib/supabase.ts<br/>@supabase/supabase-js"]
@@ -113,18 +113,20 @@ All types live in `src/lib/api.ts`. They mirror the gateway's row shapes but are
 | `ApiSession` | Session row with `status: "ready" \| "recording" \| "paused" \| "ended" \| string`, `firmware_session_id`, `firmware_sport_code`, `data_point_count`, optional `session_participants[]`, `session_summaries[]` | The `firmware_session_id` is what `startSession` sends to the tracker and what `sync.ts` uploads against. |
 | `ApiSessionParticipant` | `{ athlete_id, status, device_assignment_id? }` | Nested on `ApiSession`. |
 | `ApiSessionMetric` | Per-athlete metrics: `distance_meters`, `duration_seconds`, `max_speed_mps`, `sprint_count`, `workload_index`, `step_count_delta`, `impact_count`, `acceleration_magnitude_summary`, `load_balance_score`, `data_quality_status`, `recorded_at` | Converted by `api-session-adapter` to UI `SessionMetrics`. |
-| `ApiSessionSummary` | Aggregate row: `total_distance_meters`, `duration_seconds`, `max_speed_mps`, `total_sprint_count`, `athlete_count`, `completed_at` | |
-| `ApiTelemetryPoint` | `{ point_index, athlete_id, timestamp, latitude, longitude, speed_mps, step_count_delta }` | Paged by `getTelemetry`; `latitude`/`longitude` may be `null` (no-GPS fixes). |
+| `ApiSessionSummary` | Aggregate row: `total_distance_meters`, `max_speed_mps`, `total_sprint_count`, `athlete_count`, `average_intensity`, `completed_at`, quality/timestamps | This table has no `duration_seconds`; duration is per-athlete metric data. |
+| `ApiTelemetryPoint` | `{ point_index, athlete_id, timestamp, latitude, longitude, speed_mps, accel_magnitude, step_count_delta }` | Paged by `getTelemetry`; location and sensor fields may be `null`. |
 | `ApiSyncRecord` | `{ id, session_id, sync_status, error_message, payload_size_bytes, point_count, payload_format: "json"|"ndjson"|"msgpack", compression: "none"|"gzip", created_at, updated_at }` | |
-| `ApiDevice` | `{ id, serial_number?, name?, status?, firmware_version?, battery_level?, last_seen_at? }` | |
+| `ApiDevice` | Registered tracker identity, display/BLE name, hardware model, status, firmware, last battery/seen time, assignments and pairing states | Combined with local BLE bindings by `DeviceProvider`. |
+| `ApiAthlete` / `ApiGoal` | Athlete roster/identity and the caller-visible goal rows | Feed device assignment, player analytics and Home goals. |
+| `ApiDeviceClaim` | `{ device, pairing, assignment, reused }` | Result of app-scoped `POST /devices/claim`. |
 | `ApiErrorPayload` | `{ error?: string; issues?: unknown }` | The gateway error envelope, attached to `ApiError.payload`. |
 
 ---
 
 ## 3. Gateway methods (endpoint table)
 
-::: tip Verified against `src/lib/api.ts` and `src/lib/api.test.ts`
-The table below is the canonical method → path → verb map. The test `"maps every mobile API function to its gateway method and path"` asserts each row by calling the method with a mock fetch and checking the URL and `init.method`. The brief and source map call this the "27-method" table, but the actual code has **28 gateway methods** (the source map's count is off by one); this page reflects the real `api.ts`. See the [discrepancy note](#discrepancies-from-the-source-map) below.
+::: warning Source is ahead of the endpoint-map test
+`createApiClient` currently exposes **35 authenticated gateway methods** plus `uploadToSignedUrl`. The test named `"maps every mobile API function..."` covers 32 of those gateway methods; it does not yet include `getMyAthlete`, `getAthleteAnalytics`, or `listGoals`. The table below follows `api.ts`, not the stale test name.
 :::
 
 | # | Method | Path | HTTP | Backend route doc |
@@ -152,25 +154,33 @@ The table below is the canonical method → path → verb map. The test `"maps e
 | 21 | `getSyncRecords(id)` | `/sessions/{id}/sync` | GET | [Ingestion Pipeline](../backend/ingestion-pipeline) |
 | 22 | `getTelemetry(id, params?)` | `/sessions/{id}/telemetry` | GET | [Ingestion Pipeline](../backend/ingestion-pipeline) |
 | 23 | `listDevices()` | `/devices` | GET | [Devices](../backend/routes/devices) |
-| 24 | `getDevice(id)` | `/devices/{id}` | GET | [Devices](../backend/routes/devices) |
-| 25 | `pairDevice(id, body)` | `/devices/{id}/pair` | POST | [Devices](../backend/routes/devices) |
-| 26 | `unpairDevice(id)` | `/devices/{id}/unpair` | POST | [Devices](../backend/routes/devices) |
-| 27 | `assignDevice(id, athleteId)` | `/devices/{id}/assign` | POST | [Devices](../backend/routes/devices) |
-| 28 | `unassignDevice(id)` | `/devices/{id}/assign` | DELETE | [Devices](../backend/routes/devices) |
+| 24 | `listMyDevices()` | `/devices/mine` | GET | [Devices](../backend/routes/devices) |
+| 25 | `getDevice(id)` | `/devices/{id}` | GET | [Devices](../backend/routes/devices) |
+| 26 | `claimDevice(body)` | `/devices/claim` | POST | [Devices](../backend/routes/devices) |
+| 27 | `renameDevice(id, displayName)` | `/devices/{id}/name` | PATCH | [Devices](../backend/routes/devices) |
+| 28 | `listAthletes()` | `/athletes` | GET | [Athletes](../backend/routes/athletes) |
+| 29 | `getMyAthlete()` | `/athletes/me` | GET | [Athletes](../backend/routes/athletes) |
+| 30 | `getAthleteAnalytics(id, params?)` | `/athletes/{id}/analytics` | GET | [Analytics](../backend/routes/analytics) |
+| 31 | `listGoals()` | `/goals` | GET | [Goals](../backend/routes/goals) |
+| 32 | `pairDevice(id, body)` | `/devices/{id}/pair` | POST | [Devices](../backend/routes/devices) |
+| 33 | `unpairDevice(id)` | `/devices/{id}/unpair` | POST | [Devices](../backend/routes/devices) |
+| 34 | `assignDevice(id, athleteId)` | `/devices/{id}/assign` | POST | [Devices](../backend/routes/devices) |
+| 35 | `unassignDevice(id)` | `/devices/{id}/assign` | DELETE | [Devices](../backend/routes/devices) |
 
-::: details Row 29: the signed-URL PUT (not a gateway endpoint)
+::: details The signed-URL PUT (not a gateway endpoint)
 | Method | Path | HTTP | Bearer? |
 | :--- | :--- | :--- | :--- |
 | `uploadToSignedUrl(signedUrl, body, contentType?)` | a pre-signed storage URL returned by `createIngestUrl` | PUT | **None** (the URL's own `token` query param authorizes the write). |
-This is a client method but not a gateway route, so it is not counted in the 28 gateway endpoints above. `sync.ts` uses it to push `toTelemetryEnvelope` output to object storage, then calls `completeIngest` to close the sync record. See [Tracker & Sync](./tracker-and-sync).
+This is a client method but not a gateway route, so it is not counted in the 35 authenticated methods above. `sync.ts` uses it to push `toTelemetryEnvelope` output to object storage, then calls `completeIngest` to close the sync record. See [Tracker & Sync](./tracker-and-sync).
 :::
 
 ### Query-string helpers
 
-`listSessions` and `getTelemetry` build query strings via an internal `queryString()` helper that only appends keys whose value is not `undefined`:
+`listSessions`, `getTelemetry`, and `getAthleteAnalytics` build query strings via an internal `queryString()` helper that only appends keys whose value is not `undefined`:
 
 - `listSessions({ teamId?, status?, limit?, offset? })` → `?team_id=…&status=…&limit=…&offset=…`
 - `getTelemetry(id, { athleteId?, afterIndex?, limit? })` → `?athlete_id=…&after_index=…&limit=…`
+- `getAthleteAnalytics(id, { from?, to? })` → `?from=…&to=…`
 
 `api.test.ts` asserts `listSessions({ teamId: "team-1", limit: 10, offset: 20 })` produces exactly `https://api.example.test/sessions?team_id=team-1&limit=10&offset=20`.
 
@@ -233,7 +243,15 @@ The thrown error is `"Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_P
 
 ## 6. Hooks
 
-Three data hooks carry real API data into the UI: `useApiMe`, `useApiSessions`, and `useApiSession`. `useRoleGuard` is also documented below, but it reads the local/Supabase role helper rather than fetching gateway data. Per the [mock-vs-real contract](./dashboard-and-analytics), the dashboard charts still use empty `MOCK_*` arrays.
+The UI has focused hooks for profile, sessions, athlete analytics, goals, and paginated telemetry. `useRoleGuard` reads local/Supabase role state rather than gateway data. See [Dashboard & Analytics](./dashboard-and-analytics) for the exact screen-by-screen real-vs-mock boundary.
+
+| Hook | Gateway calls | Consumer |
+| :--- | :--- | :--- |
+| `useApiMe` | `getMe` | Home/Profile identity |
+| `useApiSessions` / `useApiSession` | sessions, metrics, telemetry | Analytics history and API session detail |
+| `useAthleteAnalytics` | `getMyAthlete`, `getAthleteAnalytics` | Player charts and weekly performance |
+| `useMyGoals` | `listGoals` | Player Home goal progress |
+| `useSessionTelemetry` / `useTelemetryZoom` | paginated `getTelemetry` | Player Analytics drill-down |
 
 ### `useApiMe()`: `src/hooks/use-api-me.ts`
 
@@ -285,7 +303,8 @@ On mount, resolves `getUserRole()`; if the actual role differs from `allowedRole
 | `"fails locally when no authenticated session is available"` | `getAccessToken` returning `null` rejects with `{ name: "ApiError", status: 401 }` **and** `fetchImpl` is never called. |
 | `"surfaces the API error envelope and status"` | A 403 `{ error: "Forbidden" }` response throws an `ApiError` with `message === "Forbidden"` and `status === 403`. |
 | `"uploads telemetry directly without leaking the API bearer token"` | `uploadToSignedUrl` sends `Content-Type: application/json`, `method: PUT`, and **no** `Authorization` header. |
-| `"maps every mobile API function to its gateway method and path"` | The full 28-row method → method/path map (rows 1–28 in the table above). Each method is invoked with a mock fetch and the URL + `init.method` are asserted exactly. `uploadToSignedUrl` is covered by the dedicated no-bearer test above. |
+| `"maps every mobile API function to its gateway method and path"` | 32 gateway methods are invoked and their URL/verb asserted. Despite its name, the array currently omits the three newer athlete/goals methods; this is a coverage gap. `uploadToSignedUrl` has its own no-bearer test. |
+| `"sends the app-scoped claim without an organisation or hardware serial"` | `claimDevice` sends the app instance, BLE id/name and display name without client-supplied organisation or serial identity. |
 
 ### `src/lib/api-session-adapter.test.ts` (vitest)
 
@@ -297,14 +316,11 @@ Both files are `.test.ts` and run under `vitest`. See [Testing](./testing) for t
 
 ---
 
-## Discrepancies from the source map
+## Known contract-maintenance gaps
 
-Re-verifying the endpoint table against `src/lib/api.ts` and `src/lib/api.test.ts` surfaced two issues in the writer brief / source map §6, both fixed in this page:
-
-1. **Method count.** The brief and source map §6 both label this the "27-method" endpoint table, but `createApiClient` returns **28 gateway methods** (rows 1–28 above) plus `uploadToSignedUrl` (the signed-storage PUT, not a gateway endpoint). The `api.test.ts` `"maps every mobile API function to its gateway method and path"` array contains exactly 28 entries. The "27" count is off by one; this page documents all 28.
-2. **`setTargets` vs `createTarget`.** The source map §6 table names the `POST /sessions/{id}/targets` method `setTargets`. The actual `api.ts` method is `createTarget` (signature `createTarget(id, body: Record<string, unknown>)`), and the test asserts `client.createTarget("s1", { target_scope: "squad" })` → `POST /sessions/s1/targets`. The table above uses the real name.
-
-No other discrepancies: every path and HTTP verb in the source map §6 table matches `api.ts` and `api.test.ts` exactly.
+- Mobile response types are locally re-declared instead of inferred from SSP-API's exported `AppType`, so backend/mobile drift is possible.
+- The endpoint-map test has not caught up with the three athlete/goals methods noted above.
+- `createTarget` is the actual method name for `POST /sessions/{id}/targets`; older notes called it `setTargets`.
 
 ---
 

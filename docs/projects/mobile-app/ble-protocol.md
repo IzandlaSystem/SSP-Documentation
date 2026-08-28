@@ -1,17 +1,17 @@
 ---
 title: BLE GATT Protocol
-description: GATT service, characteristic map (0x02–0x06 and 0x08), binary parsers/builders, and implemented-vs-spec divergences for the SSP-S1 SportTracker protocol expected by SSP-Mobile-App.
+description: SSP-S1 custom GATT service, session/live-data wire formats, A-GPS, and the separate standard MCUmgr/SMP firmware-update transport expected by SSP-Mobile-App.
 outline: deep
 ---
 
 # BLE GATT Protocol
 
-The mobile app talks to the **SSP-S1** tracker (Nordic Thingy:91X / nRF9151) over a single custom GATT service. The wire format is defined in `src/features/tracker/protocol.ts`: binary, little-endian, no JSON on the wire. This page documents the **implemented** protocol as it exists in code.
+The mobile app uses two BLE services on the **SSP-S1** tracker: the SSP custom GATT service for status, recording, stored sessions, A-GPS, and live telemetry; and Zephyr's standard MCUmgr/SMP service for firmware image management and reset. The custom wire format is binary and little-endian. SMP uses its standard big-endian header plus CBOR.
 
 > [!IMPORTANT]
-> The implemented `protocol.ts` is **authoritative for what this app expects**, not proof of compatibility with a particular firmware build. The design spec `docs/superpowers/specs/2026-06-23-ble-protocol-alignment-design.md` is a **Draft** and diverges from the code in several places (download command byte, session-ID width, list-entry layout, missing DELETE/DFU). See [Divergence from spec](#divergence-from-spec). Physical-device compatibility remains a separate verification gate.
+> The implemented source is **authoritative for what this app expects**, not proof of compatibility with a particular firmware build. The draft custom-protocol spec diverges from `protocol.ts` in the download command, session-ID width, list-entry layout, DELETE, and its proposed custom `0x07` DFU characteristic. The app's implemented DFU path instead uses standard MCUmgr/SMP. Physical-device compatibility and post-reset boot remain separate gates.
 
-Source: `src/features/tracker/protocol.ts`. Service layer (BleManager, connect/download timeouts, provider): see [Live Tracking & Sync](./tracker-and-sync). Upload of parsed sessions to the backend: see [Ingestion Pipeline](../backend/ingestion-pipeline).
+Source: `src/features/tracker/protocol.ts`, `src/features/tracker/dfu/smp.ts`, and `src/features/tracker/dfu/smp-client.ts`. Service/provider behavior is in [Live Tracking & Sync](./tracker-and-sync).
 
 ---
 
@@ -27,8 +27,10 @@ Source: `src/features/tracker/protocol.ts`. Service layer (BleManager, connect/d
 | `SESSION_DATA_CHARACTERISTIC_UUID` | `00000005-1234-5678-9ABC-DEF012345678` | 0x05: Session data (notify). |
 | `AGPS_CHARACTERISTIC_UUID` | `00000006-1234-5678-9ABC-DEF012345678` | 0x06: A-GPS reference location. |
 | `LIVE_DATA_CHARACTERISTIC_UUID` | `00000008-1234-5678-9ABC-DEF012345678` | 0x08: Live IMU/GNSS samples. |
+| `SMP_SERVICE_UUID` | `8D53DC1D-1DB7-4CD3-868B-8A527460AA84` | Standard Zephyr/MCUmgr SMP service, not SSP-specific. |
+| `SMP_CHARACTERISTIC_UUID` | `DA2E7828-FBCE-4E01-AE9E-261174997C48` | Standard SMP request/response characteristic. |
 
-There is **no** `0x07` (DFU Control) characteristic UUID defined in `protocol.ts`. DFU is not implemented at the protocol layer; see [Divergence from spec](#divergence-from-spec).
+There is no custom SSP `0x07` DFU characteristic in `protocol.ts`. That does not mean DFU is absent: firmware updates use the separate SMP UUIDs above.
 
 ### Session control commands (`SESSION_COMMAND`)
 
@@ -52,8 +54,23 @@ All multi-byte fields are **little-endian**. Offsets are relative to the charact
 | `0x04` | SESSION_CONTROL | write | `SESSION_COMMAND`: start `[0x01]`, stop `[0x02]`, list `[0x10]`, download `[0x11, sid_u16_LE]`. | `0x01` START, `0x02` STOP, `0x03` DELETE (stub), `0x04` STREAM `[0x04, sid_u32_LE]`. | **Major.** Download is `0x11` + **u16** in code vs `0x04` + **u32** in spec. Code has **no** `0x03` DELETE. Code adds `0x10` list (spec reads the list via 0x03 directly). |
 | `0x05` | SESSION_DATA | notify | `parseSessionDownloadEvent`. `0x01` chunk (payload = `bytes.slice(1)`, requires ≥ 2 B); `0x00` complete (**7 B**: `firmwareSessionId` u16 LE @1, `totalBytes` u32 LE @3); `0xff` error (**4 B**: `firmwareSessionId` u16 LE @1, `code` u8 @3). Chunk payloads are concatenated and parsed as a v2 firmware session via `parseFirmwareSession`. | 10-byte chunk headers (message_type, session_id **u32**, chunk_index, total_chunks, point_count) + 36-byte `session_data_point_t`. EOS 9 B `[0x00, sid_u32, 0x0000, 0x0000]`; error 6 B `[0xFF, sid_u32, err]`. | **Major.** Code uses **u16** session IDs (7 B complete / 4 B error) vs spec **u32** (9 B / 6 B). Code chunks are raw v2-firmware-session bytes (no chunk_index/total_chunks/point_count header), not the spec's 36-byte point stream. |
 | `0x06` | AGPS | write | `buildReferenceLocationRequest` → 23 B. The 4-byte `0x20` result is parsed from the **0x05 SESSION_DATA notification**, not from a 0x06 subscription. See [A-GPS reference location](#a-gps-reference-location-0x06). | 0x06 A-GPS. | The request uses 0x06, while the mobile service multiplexes the acknowledgement onto 0x05. |
-| `0x07` | DFU Control | None | **Not implemented.** No UUID constant, no parser, no builder in `protocol.ts`. | Spec references a DFU Control characteristic. | **Major.** DFU does not exist in code. |
+| `0x07` | Proposed custom DFU Control | None | No custom UUID/parser/builder. Implemented DFU uses the separate standard SMP service below. | Draft spec references a custom DFU Control characteristic. | **Major.** The proposed custom transport is not used; the capability exists through MCUmgr/SMP instead. |
 | `0x08` | LIVE_DATA | notify | `parseLiveSample`. IMU `0x01` (**21 B**) / GNSS `0x02` (requires ≥ **23 B** and ignores any trailing bytes). See [Live data](#live-data-0x08). | New 0x08: IMU 0x01 21 B, GPS 0x02 43 B. | IMU matches. **GNSS encoding differs**: code parses the first 23 B as scaled integers (int32 lat/lng ÷1e7, int16 alt ÷100, u16 speed ÷100, u64 timestamp, u8 satellites, u8 valid); spec describes a 43-byte IEEE-float layout (float64 lat/lng, float32 alt/speed/heading/hdop, u8 satellites/fix_valid @33/34, int64 timestamp @35). Code exposes no heading/hdop. |
+
+---
+
+## Firmware update over MCUmgr/SMP
+
+`SmpClient` subscribes to the standard SMP characteristic and permits one request at a time. Requests are fragmented to `device.mtu - 3` byte writes without response, paced by 15 ms; notification fragments are reassembled using the length in the 8-byte SMP header. Ordinary requests time out after 15 seconds and image-upload responses after 30 seconds.
+
+| Operation | MCUmgr group / command | App behavior |
+| :--- | :--- | :--- |
+| List image slots | Image group `1`, state `0`, READ | Parses version, hash, slot, active/pending/confirmed/permanent flags. |
+| Upload image | Image group `1`, upload `1`, WRITE | SHA-256 hashes the image and sends 200-byte data chunks, following the next offset returned by the tracker. |
+| Test / confirm | Image group `1`, state `0`, WRITE | A hash with `confirm=false` marks a test image; `confirm=true` without a hash confirms the running/pending image. |
+| Reset | OS group `0`, reset `5`, WRITE | Reboots the tracker; the BLE disconnect is expected. |
+
+The code and unit tests prove framing, CBOR, offset/error handling, and provider wiring. They do not prove throughput on the target, MCUboot swap success, or that the new image boots and resumes `SportTracker` advertising.
 
 ---
 
@@ -201,8 +218,8 @@ The design spec (`docs/superpowers/specs/2026-06-23-ble-protocol-alignment-desig
 2. **No `0x03` DELETE.**
    `SESSION_COMMAND` exposes only `start` (`0x01`), `stop` (`0x02`), `list` (`0x10`), and `download` (`0x11`). The spec's `0x03` DELETE (with implicit confirmation via an updated 0x03 list notification) is **not implemented**; there is no way to delete a stored session over BLE from the app.
 
-3. **No `0x07` DFU Control.**
-   There is no DFU characteristic UUID, parser, or builder in `protocol.ts`. The spec references a DFU Control characteristic; it does not exist in code. Do not assume any OTA/DFU path through this module. (Firmware OTA, when it exists, is a separate concern; see [Configuration & Build](./configuration).)
+3. **No custom `0x07` DFU Control.**
+   The draft spec's custom characteristic does not exist in `protocol.ts`. The implemented update path is separate and standard: `dfu/smp.ts` + `dfu/smp-client.ts` use Zephyr/MCUmgr's fixed service and characteristic UUIDs. Do not implement or test DFU by looking for SSP characteristic `0x07`.
 
 4. **Session list entry: 15 B + null vs 17 B.**
    `parseSessionListEntry` requires 15 bytes and also accepts a 1-byte `0x00` payload as `null` (empty/terminator). The decoded fields are `firmwareSessionId` (u16), `recordCount` (u32), `unixEpochSeconds` (u32), `fileSizeBytes` (u16), for 12 decoded bytes; bytes 12–14 are frame bytes the type ignores. The spec's 17-byte entry is a different layout: `session_id` u32, `start_time_utc` u32, `duration_s` u32, `sport` u8, `point_count` u16, `crc16` u16. The field sets do not line up.

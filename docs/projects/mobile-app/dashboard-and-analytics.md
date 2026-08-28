@@ -8,18 +8,23 @@ outline: deep
 
 The dashboard and analytics surfaces live in [`src/components/dashboard/`](https://github.com/IzandlaSystem/SSP-Mobile-App/blob/main/src/components/dashboard) and are composed by the Coach Home, Player "Home" (Dashboard), Analytics, and Session Detail routes. This page documents the screen shells, the component catalog, the hand-rolled SVG charts, the football-pitch heatmap, and the session history/detail flow.
 
-::: warning Mock-first: read this first
-**Most dashboard data is mocked and empty.** Every `MOCK_*` collection in `src/components/dashboard/mock-data.ts` is `[]`; singleton placeholders carry explicit zero/"No …" values. Screens therefore render empty or zero states by default. Charts are fed from these empty `MOCK_*` ranges, **not** from the API.
-
-The only real data on these screens flows through three hooks:
+::: warning Data sources: what's real vs. mock, per screen
+**This is screen-specific, not app-wide.** The player Analytics screen and the player Home's performance/goals cards pull real data from SSP-API. The coach Analytics screen, coach Home, and the player Home's "Today's Plan" card are unchanged and still render from empty `MOCK_*` collections in `src/components/dashboard/mock-data.ts` (every one is `[]`; singleton placeholders carry explicit zero/"No …" values) — those surfaces render empty or zero states by default.
 
 | Hook | Source | Used by |
 | :--- | :--- | :--- |
 | `useApiMe` | `api.getMe()` | Profile identity (name on Home/Profile) |
-| `useApiSessions` | `api.listSessions(limit 100)` → `apiSessionToTrainingSession` | Analytics → "Recorded sessions" list |
+| `useApiSessions` | `api.listSessions(limit 100)` → `apiSessionToTrainingSession` | Both Analytics screens → "Recorded sessions" list |
 | `useApiSession` | `api.getSession` + `getMetrics` + `getTelemetry(limit 5000)` | Session Detail screen |
+| `useAthleteAnalytics` | `api.getMyAthlete()` + `api.getAthleteAnalytics(athleteId, { from })`, bucketed client-side by `athlete-analytics-bucketing.ts` into Day/Week/Month around a chosen reference date | Player Analytics charts (§7) and Player Home's `PerformanceSummaryCard` via `weeklyPerformance` (§2) |
+| `useMyGoals` | `api.listGoals()` | Player Home's `GoalProgressList` (falls back to a `MOCK_PLAYER_TARGETS`-derived list only while `loading`, not once loaded) |
+| `useSessionTelemetry` + `useTelemetryZoom` | `api.getTelemetry(sessionId)`, paginated, re-bucketed by `session-telemetry-bucketing.ts` | Player Analytics chart drill-down zoom (§4) |
 
-`FIXTURE_*` constants (`FIXTURE_COACH_ANALYTICS`, `FIXTURE_PLAYER_ANALYTICS`, `FIXTURE_COACH_FEEDBACK`, `FIXTURE_TRAINING_SESSIONS`) hold sample data but are **imported only by tests**, never by screens. Never describe the charts as API-fed. See [API Client](./api-client) for the fetch client and adapter.
+`useAthleteAnalytics` resolves `data: null` — and the player Analytics charts then fall back to `MOCK_PLAYER_ANALYTICS` — only when the signed-in user has **no session** or **no athlete record** at all (e.g. a coach-only account). It does **not** fall back for a real athlete whose chosen Day/Week/Month window simply has no sessions in it; that renders `TimeSeriesChart`'s real "No chart data" empty state, not mock data. Same logic for `weeklyPerformance`: `null` (→ mock power score) only for no-session/no-athlete; a real athlete with zero sessions this week gets a real `{score: 0, delta: 0, sessionCount: 0}`.
+
+The **coach Analytics screen is 100% mock** (`MOCK_COACH_ANALYTICS`) and has no per-point tap interaction — this has not changed. Coach Home is also unchanged: fully mock (`MOCK_COACH_POWER_SCORE`, `MOCK_TARGETS`, `MOCK_PLAYERS`, `MOCK_NEXT_SESSION`).
+
+`FIXTURE_*` constants (`FIXTURE_COACH_ANALYTICS`, `FIXTURE_PLAYER_ANALYTICS`, `FIXTURE_COACH_FEEDBACK`, `FIXTURE_TRAINING_SESSIONS`) hold sample data but are **imported only by tests**, never by screens. See [API Client](./api-client) for the fetch client and adapter.
 :::
 
 See also: [Architecture](./architecture) for the route tree and role guards, [Design System](./design-system) for the brand palette enforced across these components, and the backend [Analytics API](../backend/routes/analytics) and [Sessions API](../backend/routes/sessions) the mobile client calls.
@@ -57,6 +62,20 @@ The 112 px tab clearance is test-enforced (`ux-truth-source.test.mjs`) so scroll
 
 Source: `src/components/dashboard/ScreenHeader.tsx`.
 
+### `FloatingTabBar.tsx`
+
+`src/components/dashboard/FloatingTabBar.tsx` is the custom bottom bar both role tab layouts pass to Expo Router `Tabs`. It is not `expo-router/unstable-native-tabs` and not a hand-rolled navigator: it receives React Navigation's tab state, descriptors, and navigation object, then customizes only the presentation.
+
+| Detail | Value |
+| :--- | :--- |
+| Position | `position: "absolute"`, `left:16 / right:16`, `bottom: insets.bottom + 12` — floats clear of the screen edge rather than sitting flush against it |
+| Shape | Pill: `rounded-full border border-border bg-card` |
+| Icons | `ROUTE_ICONS` keyed by route (file) name: `dashboard`/`home` → `Home`, `analytics` → `ChartBar`, `trainer` → `Dumbbell`, `squad` → `Users`, `profile` → `CircleUserRound` |
+| Touch target | `min-h-12 min-w-12` per tab |
+| Focused state | `text-primary` + bold label; unfocused is `text-muted-foreground` |
+
+Source: `src/components/dashboard/FloatingTabBar.tsx`, `src/app/(player)/(tabs)/_layout.tsx`, `src/app/(coach)/(tabs)/_layout.tsx`.
+
 ---
 
 ## 2. Per-role screen composition
@@ -65,7 +84,7 @@ Both Home screens share the same shell and the same top-of-page order: **Perform
 
 ### Coach Home: `src/app/(coach)/(tabs)/home.tsx`
 
-`CoachHomeScreen` uses `useDeviceDemo` + `selectDeviceReadiness`, `useApiMe`, and the Supabase user for the first-name greeting.
+`CoachHomeScreen` uses `useDevices` + `selectDeviceReadiness`, `useApiMe`, and the Supabase user for the first-name greeting. All the cards below it are still mock — this screen has not picked up any of the real-data work described in the warning box above.
 
 ```mermaid
 flowchart TD
@@ -86,17 +105,17 @@ flowchart TD
 
 ### Player Home: `src/app/(player)/(tabs)/dashboard.tsx`
 
-`PlayerDashboardScreen` mirrors the coach shell with player-scoped data.
+`PlayerDashboardScreen` mirrors the coach shell's layout and card order, but the top two cards are now real for a signed-in athlete: it calls `useAthleteAnalytics()` for `weeklyPerformance` and `useMyGoals()` for the goal list, alongside `useDevices()` + `selectDeviceReadiness` and `useApiMe()`.
 
 | Card | Data | Notes |
 | :--- | :--- | :--- |
-| PerformanceSummaryCard | `MOCK_PLAYER_POWER_SCORE` `{score:0, delta:"0"}` | status "Weekly overview" |
+| PerformanceSummaryCard | `analytics.weeklyPerformance` (real: this week's average `workload_index` vs. last week, from `useAthleteAnalytics`, §7); falls back to `MOCK_PLAYER_POWER_SCORE` `{score:0, delta:"0"}` only when `weeklyPerformance` is `null` (no session/no athlete) | status is dynamic: `"{n} session(s) this week"`, or `"No sessions yet this week"` for a real athlete with zero sessions, or `"Weekly overview"` for the mock-fallback case; supporting metric is `"Weekly goals: {n} tracked"` from the goals list below |
 | DeviceReadinessCard | `selectDeviceReadiness(devices)` | routes to `/(player)/device` |
-| Today's Plan | `MOCK_TODAY_PLAN` | singleton `{title:"No session scheduled", meta:"0 min", focus:"No active exercise target"}` |
-| GoalProgressList | `MOCK_PLAYER_TARGETS` (empty) | weekly goals |
-| MetricStrip | `MOCK_PLAYER_METRICS` filtered to Top Speed/Calories/Active Time (empty) | personal metrics |
+| Today's Plan | `MOCK_TODAY_PLAN` | still mock — singleton `{title:"No session scheduled", meta:"0 min", focus:"No active exercise target"}` |
+| GoalProgressList | `useMyGoals()` → real `api.listGoals()` result (empty array if the athlete has none — a real empty state, not mock); shows a `MOCK_PLAYER_TARGETS`-derived placeholder list only transiently, while `goals.loading` is `true` | weekly goals |
+| MetricStrip | `MOCK_PLAYER_METRICS` filtered to Top Speed/Calories/Active Time (empty) | still mock — personal metrics |
 
-Source: `src/app/(coach)/(tabs)/home.tsx`, `src/app/(player)/(tabs)/dashboard.tsx`.
+Source: `src/app/(coach)/(tabs)/home.tsx`, `src/app/(player)/(tabs)/dashboard.tsx`, `src/hooks/use-athlete-analytics.ts`, `src/hooks/use-goals.ts`.
 
 ---
 
@@ -108,9 +127,9 @@ The barrel `src/components/dashboard/index.ts` re-exports the full catalog. The 
 
 | Component | File | What it does |
 | :--- | :--- | :--- |
-| `PerformanceSummaryCard` | `PerformanceSummaryCard.tsx` | `accessibilityRole="summary"` with `accessibilityLabel={buildPerformanceSummaryAccessibilityLabel(props)}`, `bg-primary`, **no** `PowerScoreRing` (decorative ring forbidden). Stacks at large font: `usesLargeTextLayout(fontScale)` → `isLargeText ? "3xl" : "5xl"`, `MetricsStack = isLargeText ? VStack : HStack`, `summaryFontMultiplier` via `DASHBOARD_MAX_FONT_SIZE_MULTIPLIER` (≥7 `maxFontSizeMultiplier`), no `numberOfLines`. |
-| `PowerScoreRing` | `PowerScoreRing.tsx` | SVG ring (`stroke={colors.border}` / `stroke={colors.primary}`), optional trend `Badge` (TrendingUpDown icon, "{delta} vs last week"). **Not** used by `PerformanceSummaryCard`; kept for compact contexts. `accessibilityRole="image"`. |
-| `DeviceReadinessCard` | `DeviceReadinessCard.tsx` | **Presentational only**: no `expo-router`/`useDeviceDemo` import. Props `readiness: DeviceReadiness`, `onPress: () => void`. Rows: Connection / Battery / "Uploads pending" / status. `HStack` aligns values at the trailing edge. Status icons via `STATUS_PRESENTATION[readiness.state]`: attention `CircleAlert` `text-destructive`, disconnected `WifiOff`, ready `CheckCircle2` `text-primary`, empty `PackagePlus`, syncing `RefreshCw`. Footer button "Open Device Hub" (`min-h-12`). |
+| `PerformanceSummaryCard` | `PerformanceSummaryCard.tsx` | Summary accessibility label built by `buildPerformanceSummaryAccessibilityLabel(props)`, `bg-primary`, and no decorative `PowerScoreRing`. Stacks vertically at large font scales and applies `DASHBOARD_MAX_FONT_SIZE_MULTIPLIER`. |
+| `PowerScoreRing` | `PowerScoreRing.tsx` | SVG ring using semantic border/primary colors, with an optional icon-and-text trend badge. Not used by `PerformanceSummaryCard`; retained for compact contexts. |
+| `DeviceReadinessCard` | `DeviceReadinessCard.tsx` | Presentational only: receives readiness plus an `onPress` callback. Rows cover connection, battery, pending uploads, and status with trailing alignment and icon/text/color status. Footer opens Device Hub with a 48-point target. |
 | `StatCard` | `StatCard.tsx` | Single statistic tile. |
 | `TargetProgressCard` | `TargetProgressCard.tsx` | Weekly-goal progress card (player Trainer tab). |
 
@@ -132,6 +151,7 @@ The barrel `src/components/dashboard/index.ts` re-exports the full catalog. The 
 | :--- | :--- | :--- |
 | `SectionHeader` | `SectionHeader.tsx` | `min-h-12 min-w-12` Pressable header. |
 | `ChartCard` | `ChartCard.tsx` | Card wrapper: title + subtitle + optional `rightMeta` + chart children. |
+| `DateRangeSelector` | `DateRangeSelector.tsx` | Lets the player center Day/Week/Month around a chosen date. Android opens `DateTimePickerAndroid` imperatively; iOS shows an inline picker. The 48-point control shows “Today” or an `en-ZA` medium date, with reset available only away from today. Used only on Player Analytics. |
 | `SettingsGroup` | `SettingsGroup.tsx` | Grouping container for `InfoRow`/`SettingsRow`. |
 | `SettingsRow` | `SettingsRow.tsx` | `min-h-12` Pressable + optional trailing `Switch` (`min-h-12 min-w-12`); `trailing: "chevron" \| "switch" \| "none"`, `tone: "default" \| "destructive"`. |
 | `LogoutSettingsRow` | `LogoutSettingsRow.tsx` | AlertDialog "Sign out of SSP?", `variant="destructive"`, `signOut: () => supabase.auth.signOut({ scope: "local" })`, `navigateToAuth: () => router.replace("/auth")`. See [Auth & Onboarding](./auth-and-onboarding). |
@@ -151,7 +171,7 @@ Source: `src/components/dashboard/index.ts`.
 
 ## 4. Charts
 
-All charts are hand-rolled SVG (`react-native-svg`); no charting library. They are fed from the empty `MOCK_*` ranges, so on a real device they render their empty state ("No chart data" for `TimeSeriesChart`).
+All charts are hand-rolled SVG (`react-native-svg`); no charting library. On the coach screen and wherever `useAthleteAnalytics` has no data, they're fed from the empty `MOCK_*` ranges and render their empty state ("No chart data" for `TimeSeriesChart`). On the player Analytics screen with a real athlete they're fed from live session data, and their data points are tappable — see [Drill-down zoom](#drill-down-zoom-usetelemetryzoom) below.
 
 ### `TimeSeriesChart.tsx`
 
@@ -161,8 +181,27 @@ All charts are hand-rolled SVG (`react-native-svg`); no charting library. They a
 - Area variant fills with a vertical `LinearGradient` (`colors.primary`, opacity 0.22 → 0.02).
 - Width clamped to `max(240, min(600, screenWidth - 64))`, default height 180.
 - Three y-axis ticks, grid lines at `colors.border` (opacity 0.3), x-axis labels anchored start/middle/end.
-- `accessibilityRole="image"` with `accessibilityLabel` from `buildTimeSeriesAccessibilityLabel`; a visible comparison caption from `buildLatestComparisonLabel` is rendered below the chart.
+- `accessibilityRole="image"` with `accessibilityLabel` from `buildTimeSeriesAccessibilityLabel`; a visible comparison caption from `buildLatestComparisonLabel` is rendered below the chart. When `onPointPress` is provided the label gets a trailing "Tap a point to zoom in." hint.
 - Empty data → "No chart data" placeholder plus the comparison label.
+- Optional `onPointPress?: (label: string) => void` prop: each rendered data point gets a second, larger (`r={16}`) transparent `Circle` on top purely as a touch target, calling back with that point's `label`. The chart itself has no gesture/pinch/pan code — an earlier pinch-to-zoom prototype (visually scaling the SVG) was built and then removed in favor of the real data drill-down below, which the player screen was **actually** asking for.
+
+### Drill-down zoom (`useTelemetryZoom`)
+
+The player Analytics screen wires `onPointPress` on all three `TimeSeriesChart`s to a shared drill-down: tapping a point narrows the *displayed time window and data source*, not the SVG's visual scale. There is no zoom affordance on the coach screen (mock data has no sessions or telemetry to drill into).
+
+The ladder has five levels. The first two reuse navigation that already exists; the last three are new:
+
+| Level | What a tap does | Data source |
+| :--- | :--- | :--- |
+| Month / Week (base range tabs) | Resolves the tapped bucket's window via `resolveBucketWindow(range, label, referenceDate)` (`athlete-analytics-bucketing.ts`), finds the session whose `recorded_at` falls in it, and sets `referenceDate` to that session's actual date + switches the range tab to `"day"` | `trend: ApiSessionMetric[]` (session-level aggregates), already fetched by `useAthleteAnalytics` |
+| Day (base range tab, hourly buckets) | Resolves the tapped hour's window, finds the session in it, and calls `zoom.beginZoom(sessionId, windowStart, windowEnd)` | Triggers the first real fetch: `useSessionTelemetry` pages through `GET /sessions/:id/telemetry` (500 rows/page, capped at 40 pages) and caches the full point list per session |
+| Hour | Re-buckets the **same cached points** into 12 five-minute sub-buckets across the tapped hour | Raw `session_telemetry_points` (`accel_magnitude`, `speed_mps`, `timestamp`) |
+| Minute | Re-buckets into 12 five-second sub-buckets across the tapped 5-minute window | Same cached points, no refetch |
+| Second (finest) | Re-buckets into 10 sub-second buckets across the tapped 5-second window; a further tap is a no-op | Same cached points, no refetch |
+
+`session-telemetry-bucketing.ts`'s `bucketTelemetryPoints(points, level, windowStart, windowEnd)` computes Training Load / Avg Intensity / Distance per sub-bucket using constants mirrored from SSP-API's `src/lib/telemetry.ts` (`GRAVITY_MPS2`, `INTENSITY_CEILING_MPS2 = 6`, `ACCEL_LOAD_AU_PER_MPS2_MINUTE = 40`, `WORKLOAD_CEILING_AU = 9000`) so a drilled-in point-level chart reads consistently against the session-level numbers it zoomed in from — deliberately approximate (never written back), only driving what the chart shows.
+
+`use-telemetry-zoom.ts` holds a small `ZoomFrame[]` stack (`{ level, windowStart, windowEnd }`); `drillInto(label)` pushes a frame using the current level's `windows` map (each bucket's own `{start, end}`, returned alongside its series data) to resolve the next window; `zoomOut()` pops one frame, or clears the stack (and the cached session) entirely once at the first frame. A status bar above the charts shows the zoomed session's window and cadence (e.g. "Session · 13:00–14:00 · every 5 min") plus a **Zoom out** button whenever `zoom.active` is true; a spinner shows while `useSessionTelemetry` is fetching. Changing the range tab or the `DateRangeSelector`'s date calls `zoom.reset()` first so a stale zoomed session never survives a navigation change.
 
 ### `time-series-geometry.ts`
 
@@ -312,7 +351,7 @@ Source: `src/components/dashboard/FootballPitchHeatmap.tsx`, `heatmap-density.ts
 
 ## 7. Analytics screens
 
-Both Analytics tabs are identical in chart structure and differ only in the data source (`MOCK_COACH_ANALYTICS` vs `MOCK_PLAYER_ANALYTICS`) and the player-only feedback feed. Charts use the empty `MOCK_*` ranges; **only** the `SessionHistorySection` is API-fed (`useApiSessions`).
+The two Analytics tabs share the same chart/tab shell but are **no longer equivalent**: the coach screen is still fully mock, the player screen is real (with a date picker and the drill-down zoom from §4) for a signed-in athlete. `SessionHistorySection` is API-fed on both (`useApiSessions`).
 
 ### Coach: `src/app/(coach)/(tabs)/analytics.tsx`
 
@@ -327,15 +366,33 @@ flowchart TD
 ```
 
 - `TimeRange` tabs (day/week/month) with <code v-pre>accessibilityState=&#123;&#123; selected: range === r.value &#125;&#125;</code>, `TabsTrigger className="h-12 flex-1"`, and `rangeLabel={analytics.meta}` on all three charts.
-- Three `TimeSeriesChart`s (trainingLoad area / intensity line / distance line) + one `BarChartMock` (workload zones, `sort="none"`).
+- Three `TimeSeriesChart`s (trainingLoad area / intensity line / distance line) + one `BarChartMock` (workload zones, `sort="none"`). No `onPointPress` — unchanged, still fully `MOCK_COACH_ANALYTICS`.
 - `SessionHistorySection` wired to `useApiSessions()`: loading/error passed through; `onSelect` pushes `/(coach)/session/[id]`.
 - "Top performers" renders `MOCK_LEADERBOARD` (empty) via `LeaderboardRow`.
+- No `DateRangeSelector` on this screen — adding one here would be decorative, since there's no per-date data behind it.
 
 ### Player: `src/app/(player)/(tabs)/analytics.tsx`
 
-Mirrors the coach screen using `MOCK_PLAYER_ANALYTICS`, default range `week`, and adds a trailing `CoachFeedbackFeed` bound to `MOCK_COACH_FEEDBACK` (empty → "No coach feedback yet"). `onSelect` pushes `/(player)/session/[id]`.
+```mermaid
+flowchart TD
+    D["DateRangeSelector<br/>referenceDate state"] --> T["Tabs Day/Week/Month<br/>zoom.reset() + setRange on change"]
+    T --> Z{"zoom.active?"}
+    Z -->|yes| ZB["Zoom status bar<br/>zoomLabel + Zoom out button"]
+    Z -->|no| CL
+    ZB --> CL["ChartCard Training Load<br/>TimeSeriesChart area, onPointPress"]
+    CL --> CI["ChartCard Avg Intensity<br/>TimeSeriesChart line, onPointPress"]
+    CI --> CD["ChartCard Distance<br/>TimeSeriesChart line, onPointPress"]
+    CD --> CZ["ChartCard Workload distribution<br/>BarChartMock sort=none"]
+    CZ --> SH["SessionHistorySection<br/>useApiSessions (REAL)"]
+    SH --> CF["CoachFeedbackFeed<br/>MOCK_COACH_FEEDBACK []"]
+```
 
-Source: `src/app/(coach)/(tabs)/analytics.tsx`, `src/app/(player)/(tabs)/analytics.tsx`.
+- `useAthleteAnalytics(referenceDate)` supplies `analytics.data`/`trend`; `useTelemetryZoom()` supplies the drill-down state (§4). `analytics = zoom.active && zoom.data ? zoom.data : (athleteAnalytics.data?.[range] ?? MOCK_PLAYER_ANALYTICS[range])` — mock is the fallback only, never the default.
+- `DateRangeSelector` (new; see the component catalog) sits above the range tabs; changing either the date or the range tab calls `zoom.reset()` first.
+- All three `TimeSeriesChart`s get `onPointPress={handlePointPress}`; `handlePointPress` implements the drill-down ladder described in §4.
+- A trailing `CoachFeedbackFeed` bound to `MOCK_COACH_FEEDBACK` (empty → "No coach feedback yet") — unchanged, still mock. `onSelect` pushes `/(player)/session/[id]`.
+
+Source: `src/app/(coach)/(tabs)/analytics.tsx`, `src/app/(player)/(tabs)/analytics.tsx`, `src/hooks/use-athlete-analytics.ts`, `src/hooks/use-telemetry-zoom.ts`, `src/hooks/use-session-telemetry.ts`, `src/components/dashboard/charts/session-telemetry-bucketing.ts`, `src/components/dashboard/athlete-analytics-bucketing.ts`.
 
 ---
 
@@ -352,6 +409,6 @@ The dashboard suite runs under `node --test` (legacy source-contract tests). See
 | `coach-feedback.test.mjs` | `FIXTURE_COACH_FEEDBACK` length 3, dates newest-first, `formatFeedbackDate("2026-07-18T14:30:00.000Z") === "18 Jul 2026"`. |
 | `dashboard-helpers.test.mjs` | `getProgressPercentage` clamps; `usesLargeTextLayout` switches at 1.5 and rejects NaN/Infinity; `buildPerformanceSummaryAccessibilityLabel` covers score/delta/status/supportingMetric up/down/no-change with NaN/Infinity fallback. |
 | `ux-truth-source.test.mjs` | Dashboard semantic canvas + SVG colors; 112 px tab clearance; performance summary is one accessible summary with no decorative ring and stacks at font scales (≥7 `maxFontSizeMultiplier`); `DeviceReadinessCard` presentational with aligned rows + status icons; coach/player Home order (Performance → DeviceReadiness → Goals) + route truth; 48 dp headers/rows; `PowerScoreRing` trend badge; no legacy green across 16 dashboard files; squad/trainer truthful searchable lists; people rows one status with no fake actions; team/organisation non-interactive; logout failure-tolerant local; role boundaries + `DevRoleSwitcher` returns null. |
-| `brand-contract.test.mjs` | CSS + `SEMANTIC_COLORS` brand alignment (all 14 token triples), no `34 197 94` / `#22C55E`; gluestack system-mode clearing; Lato loaded once (4 faces, no Figtree); shared primitives brand typography + 48 dp + no palette utilities; auth Switch `min-h-12`; avatar `bg-primary` (no `bg-green-`); `NativeTabs tintColor="#003399"`; `ssp-mark.png` sha256 pin. |
+| `brand-contract.test.mjs` | CSS + `SEMANTIC_COLORS` alignment, no legacy green/Figtree, gluestack system-mode clearing, Lato, shared primitives and touch targets, `FloatingTabBar`, and the pinned SSP mark. |
 
 Source: `src/components/dashboard/*.test.mjs`, `src/components/dashboard/charts/time-series-chart.test.mjs`.
