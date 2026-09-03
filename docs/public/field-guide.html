@@ -527,6 +527,15 @@
       <span class="tag">Why a session might not show up</span>
       <p>Only sessions with meaningful activity (roughly 100 steps or more) appear in your session history. Very brief or accidental recordings (bumping the button, a few seconds of auto-detect) are still kept safely on the tracker, they don't clutter your list. This is a display filter, not data loss.</p>
     </div>
+
+    <h3>Full analytics can take up to a day</h3>
+    <p>A session shows up in your app within moments of syncing, but its Training Load, intensity, and route charts need one more step: the server turns the raw recording into those numbers on a scheduled job that currently runs once every 24 hours. Until that job runs, the session sits fine and complete, just waiting to be processed, so a session synced this morning may not show full numbers until tomorrow's run. Nothing is lost while it waits.</p>
+    <p>If you need a specific session's numbers sooner, ask us and we can trigger that processing manually. It finishes in under a minute once triggered.</p>
+
+    <div class="callout">
+      <span class="tag">Phase 2: faster processing</span>
+      <p>The once-a-day limit comes from the hosting plan the server currently runs on, not from anything about the tracker or the app itself. The plan for phase 2 is to move that processing job somewhere without that restriction, either by upgrading the current hosting plan or by moving the job to a different host, so sessions get their full analytics within minutes instead of up to a day.</p>
+    </div>
   </section>
 
   <section id="using-the-app">
