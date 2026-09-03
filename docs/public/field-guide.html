@@ -424,7 +424,7 @@
 
     <ol class="steps">
       <li><strong>Turn on the tracker</strong> and open the SSP app. From the Devices tab, tap <strong>Add device</strong>.</li>
-      <li><strong>Wait for the scan.</strong> The app lists nearby SSP trackers by signal strength. If nothing appears, make sure the tracker is powered on and that Bluetooth and Location are enabled on your phone — the app needs Location permission to scan for Bluetooth devices, which is an Android requirement, not something the tracker itself uses.</li>
+      <li><strong>Wait for the scan.</strong> The app lists nearby SSP trackers by signal strength. If nothing appears, make sure the tracker is powered on and that Bluetooth and Location are enabled on your phone: the app needs Location permission to scan for Bluetooth devices, which is an Android requirement, not something the tracker itself uses.</li>
       <li><strong>Select your tracker</strong> from the list, then give it a name you'll recognise later (e.g. a player's name or a squad number).</li>
       <li><strong>Confirm.</strong> Once paired, the tracker appears on your Devices screen and the app will connect to it automatically from now on, any time it's powered on and in range.</li>
     </ol>
@@ -440,7 +440,7 @@
       <span class="section-num">02</span>
       <h2 class="section-title">The status light</h2>
     </div>
-    <p class="lede">The tracker has one status light. Its colour and pattern tell you what the device is doing right now — no app required.</p>
+    <p class="lede">The tracker has one status light. Its colour and pattern tell you what the device is doing right now. No app required.</p>
 
     <div class="table-wrap">
       <table>
@@ -454,23 +454,23 @@
           </tr>
           <tr>
             <td><span class="led-swatch"><span class="dot blink solid-anim" style="background: rgb(var(--led-red)); color: rgb(var(--led-red))"></span>Red, blinking</span></td>
-            <td>Internal fault — the tracker's two internal processors have lost contact with each other. Power-cycle the tracker; contact support if it keeps happening.</td>
+            <td>Internal fault: the tracker's two internal processors have lost contact with each other. Power-cycle the tracker; contact support if it keeps happening.</td>
           </tr>
           <tr>
             <td><span class="led-swatch"><span class="dot blink solid-anim" style="background: rgb(var(--led-blue)); color: rgb(var(--led-blue))"></span>Blue, blinking</span></td>
-            <td>On, standing by — searching for a GPS fix. Not recording yet.</td>
+            <td>On, standing by, searching for a GPS fix. Not recording yet.</td>
           </tr>
           <tr>
             <td><span class="led-swatch"><span class="dot" style="background: rgb(var(--led-blue))"></span>Blue, steady</span></td>
-            <td>On, standing by — GPS fix acquired. Ready to record.</td>
+            <td>On, standing by, GPS fix acquired. Ready to record.</td>
           </tr>
           <tr>
             <td><span class="led-swatch"><span class="dot" style="background: rgb(var(--led-green))"></span>Green, steady</span></td>
-            <td>Recording a session — still waiting on a GPS fix. Motion is being captured regardless.</td>
+            <td>Recording a session, still waiting on a GPS fix. Motion is being captured regardless.</td>
           </tr>
           <tr>
             <td><span class="led-swatch"><span class="dot" style="background: rgb(var(--led-cyan))"></span>Cyan, steady</span></td>
-            <td>Recording a session — GPS fix acquired. This is the normal state during outdoor training.</td>
+            <td>Recording a session, GPS fix acquired. This is the normal state during outdoor training.</td>
           </tr>
         </tbody>
       </table>
@@ -478,13 +478,13 @@
 
     <div class="callout warn">
       <span class="tag">Common mix-up</span>
-      <p>The status light does <strong>not</strong> show whether your phone is connected — it only reflects GPS and recording state. A tracker can be blinking blue (standing by) whether or not any phone is nearby. To check the connection, look at the app's Devices screen instead.</p>
+      <p>The status light does <strong>not</strong> show whether your phone is connected: it only reflects GPS and recording state. A tracker can be blinking blue (standing by) whether or not any phone is nearby. To check the connection, look at the app's Devices screen instead.</p>
     </div>
 
     <div class="callout warn">
       <span class="tag">You may see red during a sync</span>
-      <p>The red light is the tracker's internal "lost contact" signal between its two processors — normally caused by the two halves being genuinely out of touch. Under a large or slow sync (a lot of session data transferring over a weak connection), that same signal can flash briefly, because the internal link watchdog runs on a tight budget while it's busy moving data.</p>
-      <p>Treat a brief flash or two during an active sync as normal — it should clear on its own once the transfer catches up or finishes. If the light stays solid red for more than a few seconds, or shows up outside of a sync, treat it as the fault case above and power-cycle the tracker.</p>
+      <p>The red light is the tracker's internal "lost contact" signal between its two processors, normally caused by the two halves being out of touch. Under a large or slow sync (a lot of session data transferring over a weak connection), that same signal can flash briefly, because the internal link watchdog runs on a tight budget while it's busy moving data.</p>
+      <p>Treat a brief flash or two during an active sync as normal: it should clear on its own once the transfer catches up or finishes. If the light stays solid red for more than a few seconds, or shows up outside of a sync, treat it as the fault case above and power-cycle the tracker.</p>
     </div>
   </section>
 
@@ -493,21 +493,21 @@
       <span class="section-num">03</span>
       <h2 class="section-title">Starting &amp; stopping a session</h2>
     </div>
-    <p class="lede">A session can start two ways — you can trigger it yourself, or the tracker can notice activity on its own.</p>
+    <p class="lede">A session can start two ways: you can trigger it yourself, or the tracker can notice activity on its own.</p>
 
     <h3>Manually</h3>
     <p>Press the tracker's button once. A short press <strong>toggles</strong> recording: it starts a session if the tracker was idle, and stops the current one if it was already recording. You can also start or stop from the app's Devices screen.</p>
 
     <h3>Automatically</h3>
-    <p>If the tracker isn't recording and detects around a minute of sustained movement, it starts a session on its own — no button press needed. That way a warm-up or drill that starts before anyone reaches for the app still gets captured. It's deliberately unhurried: brief handling or picking the unit up won't trigger it.</p>
-    <p>An auto-started session ends the same way — automatically — after about three minutes without meaningful movement. A session you started manually never ends on its own; it keeps recording through breaks and huddles until you stop it yourself.</p>
+    <p>If the tracker isn't recording and detects around a minute of sustained movement, it starts a session on its own, no button press needed. That way a warm-up or drill that starts before anyone reaches for the app still gets captured. It's deliberately unhurried: brief handling or picking the unit up won't trigger it.</p>
+    <p>An auto-started session ends the same way, automatically, after about three minutes without meaningful movement. A session you started manually never ends on its own; it keeps recording through breaks and huddles until you stop it yourself.</p>
 
     <div class="callout">
       <span class="tag">Taking over an auto session</span>
-      <p>If the tracker auto-starts during your warm-up and you then press the button, it doesn't start a second session — it simply adopts the one already running as yours. That session keeps its warm-up data and, from that point on, behaves like a manual session: it won't cut out after three minutes of standing around.</p>
+      <p>If the tracker auto-starts during your warm-up and you then press the button, rather than starting a second session, it adopts the one already running as yours. That session keeps its warm-up data and, from that point on, behaves like a manual session: it won't cut out after three minutes of standing around.</p>
     </div>
 
-    <p style="margin-top: 20px;">One more detail: after any session ends by button press or from the app, auto-start stays paused for five minutes. Otherwise, deliberately stopping a session while still moving around would just have the tracker start a new one moments later.</p>
+    <p style="margin-top: 20px;">One more detail: after any session ends by button press or from the app, auto-start stays paused for five minutes. Otherwise, deliberately stopping a session while still moving around would have the tracker start a new one moments later.</p>
   </section>
 
   <section id="storage-sync">
@@ -515,17 +515,17 @@
       <span class="section-num">04</span>
       <h2 class="section-title">What gets saved, and when</h2>
     </div>
-    <p class="lede">You don't need to do anything to save a session — it's written continuously while recording, then handed to the app in the background.</p>
+    <p class="lede">You don't need to do anything to save a session: it's written continuously while recording, then handed to the app in the background.</p>
 
     <h3>On the tracker</h3>
-    <p>Data is written to the tracker's internal memory the moment a session starts, and saved incrementally throughout — not just at the end. If the tracker loses power mid-session, at most a few seconds of data are lost, never the whole recording. The session is marked complete the moment you (or auto-stop) end it.</p>
+    <p>Data is written to the tracker's internal memory the moment a session starts, and saved incrementally throughout, not just at the end. If the tracker loses power mid-session, at most a few seconds of data are lost, never the whole recording. The session is marked complete the moment you (or auto-stop) end it.</p>
 
     <h3>Getting to your phone</h3>
-    <p>Whenever your phone is running the app and connected to the tracker, new sessions are found and downloaded automatically in the background — you don't need to open a specific screen or tap anything. A <span class="pill">Sync now</span> button on the Devices screen is there if you want to force a check. Sessions already on your phone stay available even when the tracker's out of range.</p>
+    <p>Whenever your phone is running the app and connected to the tracker, new sessions are found and downloaded automatically in the background: you don't need to open a specific screen or tap anything. A <span class="pill">Sync now</span> button on the Devices screen is there if you want to force a check. Sessions already on your phone stay available even when the tracker's out of range.</p>
 
     <div class="callout">
       <span class="tag">Why a session might not show up</span>
-      <p>Only sessions with meaningful activity — roughly 100 steps or more — appear in your session history. Very brief or accidental recordings (bumping the button, a few seconds of auto-detect) are still kept safely on the tracker, they just don't clutter your list. This is a display filter, not data loss.</p>
+      <p>Only sessions with meaningful activity (roughly 100 steps or more) appear in your session history. Very brief or accidental recordings (bumping the button, a few seconds of auto-detect) are still kept safely on the tracker, they don't clutter your list. This is a display filter, not data loss.</p>
     </div>
   </section>
 
@@ -556,10 +556,10 @@
     </div>
 
     <h3>Devices</h3>
-    <p>Reached from Home or the header — this is where pairing, connection status, and your recorded sessions live. While connected, it also shows a live map of the tracker's current GPS position instead of raw sensor numbers. Sessions are listed newest-first, numbered sequentially (Session 1, Session 2, …) rather than by an internal device ID, with a short place name once it's been worked out from the route.</p>
+    <p>Reached from Home or the header: this is where pairing, connection status, and your recorded sessions live. While connected, it also shows a live map of the tracker's current GPS position instead of raw sensor numbers. Sessions are listed newest-first, numbered sequentially (Session 1, Session 2, …) rather than by an internal device ID, with a short place name once it's been worked out from the route.</p>
 
     <h3>Zooming into a session's data</h3>
-    <p>On the Analytics tab, tapping a point on any chart narrows the view: from month to a specific day, then from that day into the hour, minute, and finally second the activity happened in. A <span class="pill">Zoom out</span> button appears once you've zoomed in, and steps back out one level at a time. This is genuinely re-fetching the finer-grained data each time, not just visually stretching the chart.</p>
+    <p>On the Analytics tab, tapping a point on any chart narrows the view: from month to a specific day, then from that day into the hour, minute, and finally second the activity happened in. A <span class="pill">Zoom out</span> button appears once you've zoomed in, and steps back out one level at a time. This re-fetches the finer-grained data each time instead of visually stretching the chart.</p>
   </section>
 
   <hr class="rule" />
@@ -589,7 +589,7 @@
           <tr>
             <td>Light flashes red briefly during a sync</td>
             <td>Same signal as above, momentarily tripped by a large/slow transfer</td>
-            <td>Let the sync finish — it should clear on its own. Only power-cycle if it stays solid red beyond a few seconds</td>
+            <td>Let the sync finish; it should clear on its own. Only power-cycle if it stays solid red beyond a few seconds</td>
           </tr>
           <tr>
             <td>App won't find the tracker while pairing</td>
@@ -598,17 +598,17 @@
           </tr>
           <tr>
             <td>A session doesn't appear in the app</td>
-            <td>Under ~100 steps, so it doesn't qualify for the list — or hasn't synced yet</td>
+            <td>Under ~100 steps, so it doesn't qualify for the list, or hasn't synced yet</td>
             <td>Reconnect to the tracker and allow background sync a moment, or check <span class="pill">Sync now</span></td>
           </tr>
           <tr>
             <td>Recording won't stop after three minutes of rest</td>
-            <td>The session was started manually (button or app) — manual sessions never auto-stop</td>
+            <td>The session was started manually (button or app): manual sessions never auto-stop</td>
             <td>Press the button once, or stop it from the Devices screen</td>
           </tr>
           <tr>
             <td>Tracker keeps auto-starting right after you stop it</td>
-            <td>Shouldn't happen within five minutes of a manual stop — if it does, treat as unexpected</td>
+            <td>Shouldn't happen within five minutes of a manual stop; if it does, treat as unexpected</td>
             <td>Contact support with the approximate time it happened</td>
           </tr>
         </tbody>
